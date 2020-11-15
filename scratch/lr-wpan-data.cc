@@ -34,6 +34,16 @@
 #include <ns3/single-model-spectrum-channel.h>
 #include <ns3/constant-position-mobility-model.h>
 #include <ns3/packet.h>
+#include <ns3/mobility-model.h>
+
+#include "ns3/core-module.h"
+#include "ns3/network-module.h"
+#include "ns3/applications-module.h"
+#include "ns3/mobility-module.h"
+#include "ns3/config-store-module.h"
+#include "ns3/internet-module.h"
+#include "ns3/dsdv-helper.h"
+#include "ns3/yans-wifi-helper.h"
 
 #include "ns3/core-module.h"
 #include "ns3/network-module.h"
@@ -68,13 +78,13 @@ static void StateChangeNotification (std::string context, Time now, LrWpanPhyEnu
 }*/
 
 //How many nodes we want in the simulation
-const int NUMBER_OF_NODES = 10;
+const int NUMBER_OF_NODES = 3;
 
 int main (int argc, char *argv[])
 {
   std::srand (time(NULL));
 
-  bool verbose = true;
+  bool verbose = false;
   bool extended = false;
 
   CommandLine cmd (__FILE__);
@@ -115,9 +125,21 @@ int main (int argc, char *argv[])
   Ptr<OutputStreamWrapper> stream = ascii.CreateFileStream ("lr-wpan-data.tr");
   lrWpanHelper.EnableAsciiAll (stream);
 
+
+
+
+  //Add Mobility Model to nodes
+  MobilityHelper mobility;
+  mobility.SetMobilityModel ("ns3::ConstantPositionMobilityModel");
+  mobility.Install (zigBeeNodes);
+
+  //animation
+   AnimationInterface anim ("zigbee_simulation.xml");
+
   //set the mobility model for the devices.
   //Mobility model sets the 'physical' position and velocity of the device
   //x,y,z are location coordinates of device
+  //we will also set their locations in the animation at the same time
   int x,y,z;
 
   for( int i = 0; i < NUMBER_OF_NODES; ++i)
@@ -129,9 +151,13 @@ int main (int argc, char *argv[])
 	  x = rand() % 50;
 	  y = rand() % 50;
 	  z = rand() % 50;
-
 	  sender0Mobility->SetPosition (Vector (x,y,z));
 	  device->GetPhy()->SetMobility (sender0Mobility);
+
+	  //set location of device in zigbee
+      anim.SetConstantPosition(device->GetNode(), x, y, z);
+
+
   }
 
 
@@ -183,15 +209,7 @@ int main (int argc, char *argv[])
 								  dev2->GetMac(), params, p2);
 
 
-  //set up animation
-  AnimationInterface anim ("zigbee_simulation.xml");
 
-  int location = 1;
-  for ( auto node_iter = zigBeeNodes.Begin(); node_iter != zigBeeNodes.End(); ++node_iter)
-  {
-	  anim.SetConstantPosition(*node_iter, location, location + 5 );
-  	  ++location;
-  }
 
 
   Simulator::Run ();
