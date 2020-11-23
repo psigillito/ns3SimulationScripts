@@ -1,30 +1,3 @@
-/* -*-  Mode: C++; c-file-style: "gnu"; indent-tabs-mode:nil; -*- */
-/*
- * Copyright (c) 2011 The Boeing Company
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation;
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
- *
- * Author:  Tom Henderson <thomas.r.henderson@boeing.com>
- */
-
-/*
- * Try to send data end-to-end through a LrWpanMac <-> LrWpanPhy <->
- * SpectrumChannel <-> LrWpanPhy <-> LrWpanMac chain
- *
- * Trace Phy state changes, and Mac DataIndication and DataConfirm events
- * to stdout
- */
 #include <ns3/log.h>
 #include <ns3/core-module.h>
 #include <ns3/lr-wpan-module.h>
@@ -34,56 +7,50 @@
 #include <ns3/single-model-spectrum-channel.h>
 #include <ns3/constant-position-mobility-model.h>
 #include <ns3/packet.h>
-#include <ns3/mobility-model.h>
-
-#include "ns3/core-module.h"
-#include "ns3/network-module.h"
+#include <iostream>
+#include <string>
+#include <cmath>
+#include "ns3/netanim-module.h"
+#include "ns3/sixlowpan-module.h"
 #include "ns3/applications-module.h"
-#include "ns3/mobility-module.h"
 #include "ns3/config-store-module.h"
-#include "ns3/internet-module.h"
 #include "ns3/dsdv-helper.h"
+#include "ns3/aodv-module.h"
+#include "ns3/network-module.h"
+#include "ns3/internet-module.h"
+#include "ns3/mobility-module.h"
+#include "ns3/point-to-point-module.h"
+#include "ns3/v4ping-helper.h"
 #include "ns3/yans-wifi-helper.h"
 
-#include "ns3/core-module.h"
-#include "ns3/network-module.h"
-#include "ns3/csma-module.h"
-#include "ns3/internet-module.h"
-#include "ns3/point-to-point-module.h"
-#include "ns3/applications-module.h"
-#include "ns3/ipv4-global-routing-helper.h"
-#include "ns3/netanim-module.h"
 
-#include <stdlib.h>     /* srand, rand */
-#include <time.h>       /* time */
-#include <iostream>
 
 using namespace ns3;
 
-/*static void DataIndication (McpsDataIndicationParams params, Ptr<Packet> p)
+static void DataIndication (McpsDataIndicationParams params, Ptr<Packet> p)
 {
-  NS_LOG_UNCOND ("Received packet of size " << p->GetSize ());
+	//size of 48 is sent by aodv routing protocol beacons?
+  if(p->GetSize() != 48)
+  {
+	  NS_LOG_UNCOND ("Received packet of size " << p->GetSize ());
+  }
 }
 
 static void DataConfirm (McpsDataConfirmParams params)
 {
-  NS_LOG_UNCOND ("LrWpanMcpsDataConfirmStatus = " << params.m_status);
+	// 0 = success
+	if(params.m_status != 0)
+	{
+		  NS_LOG_UNCOND ("BAD DATA CONFIRM STATUS: " << params.m_status);
+	}
 }
 
-static void StateChangeNotification (std::string context, Time now, LrWpanPhyEnumeration oldState, LrWpanPhyEnumeration newState)
-{
-  NS_LOG_UNCOND (context << " state change at " << now.As (Time::S)
-                         << " from " << LrWpanHelper::LrWpanPhyEnumerationPrinter (oldState)
-                         << " to " << LrWpanHelper::LrWpanPhyEnumerationPrinter (newState));
-}*/
 
-//How many nodes we want in the simulation
-const int NUMBER_OF_NODES = 3;
+//how wide the grid will be (# of nodes = GRID_WIDTH * GRIDWIDTH)
+const int GRID_WIDTH = 3;
 
 int main (int argc, char *argv[])
 {
-  std::srand (time(NULL));
-
   bool verbose = false;
   bool extended = false;
 
@@ -92,127 +59,129 @@ int main (int argc, char *argv[])
   cmd.AddValue ("extended", "use extended addressing", extended);
   cmd.Parse (argc, argv);
 
-  //Helper used for configuring and creating our devices/nodes.
   LrWpanHelper lrWpanHelper;
-
   if (verbose)
   {
 	  lrWpanHelper.EnableLogComponents ();
   }
 
-  // Set the shared channel settings
+  //Config::SetDefault  ("ns3::OnOffApplication::PacketSize",StringValue ("64"));
+  //Config::SetDefault ("ns3::OnOffApplication::DataRate",  StringValue ("2048bps"));
+
+  // Each device must be attached to the same channel
   Ptr<SingleModelSpectrumChannel> channel = CreateObject<SingleModelSpectrumChannel> ();
   Ptr<LogDistancePropagationLossModel> propModel = CreateObject<LogDistancePropagationLossModel> ();
   Ptr<ConstantSpeedPropagationDelayModel> delayModel = CreateObject<ConstantSpeedPropagationDelayModel> ();
   channel->AddPropagationLossModel (propModel);
   channel->SetPropagationDelayModel (delayModel);
-
-  //set it so that all devices use the same channel
   lrWpanHelper.SetChannel(channel);
 
-  //create nodes. Think of Nodes as a generic logical base object.
-  NodeContainer zigBeeNodes;
-  zigBeeNodes.Create (NUMBER_OF_NODES);
+  //Create our base nodes
+  NodeContainer adHocNodes;
+  adHocNodes.Create(GRID_WIDTH * GRID_WIDTH);
 
-  // create the devices that are going to be 'installed' on the nodes.
-  // Devices are installed by the helper.
-  NetDeviceContainer zigBeeDevices;
-  zigBeeDevices = lrWpanHelper.Install(zigBeeNodes);
 
-  // Enable packet capture for tracing and output to lr-wpan-data.tr"
+
+
+  //set up mobility to be static and positioning in a grid
+  MobilityHelper mobility;
+  mobility.SetMobilityModel ("ns3::ConstantPositionMobilityModel");
+
+  mobility.SetPositionAllocator ("ns3::GridPositionAllocator",
+                                   "MinX", DoubleValue (0.0),
+                                   "MinY", DoubleValue (0.0),
+                                   "DeltaX", DoubleValue (100),
+                                   "DeltaY", DoubleValue (100),
+                                   "GridWidth", UintegerValue (3),
+                                   "LayoutType", StringValue ("RowFirst"));
+
+    mobility.Install (adHocNodes);
+
+
+    AodvHelper aodv;
+   // you can configure AODV attributes here using aodv.Set(name, value)
+
+   InternetStackHelper internet;
+   internet.SetRoutingHelper (aodv); // has effect on the next Install ()
+   internet.Install (adHocNodes);
+
+
+   //Install Devices on nodes
+   NetDeviceContainer adHocDevices = lrWpanHelper.Install(adHocNodes);
+
+   Ipv4AddressHelper address;
+   address.SetBase ("10.1.1.0", "255.255.255.0");
+   Ipv4InterfaceContainer interfaces = address.Assign (adHocDevices);
+
+  //set up callback
+  McpsDataConfirmCallback cb0;
+  cb0 = MakeCallback (&DataConfirm);
+
+  McpsDataIndicationCallback cb1;
+  cb1 = MakeCallback (&DataIndication);
+
+  McpsDataConfirmCallback cb2;
+  cb2 = MakeCallback (&DataConfirm);
+
+  McpsDataIndicationCallback cb3;
+  cb3 = MakeCallback (&DataIndication);
+
+  AnimationInterface anim ("PHIL_TEST.xml");
+
+
+  for(unsigned int i = 0; i < adHocNodes.GetN(); ++i)
+  {
+
+	  //set address, this is a bad way to do this
+	  Ptr<LrWpanNetDevice> device = DynamicCast<LrWpanNetDevice> (adHocDevices.Get(i));
+
+	  device->GetMac()->SetMcpsDataConfirmCallback (cb0);
+	  device->GetMac()->SetMcpsDataIndicationCallback (cb1);
+	  device->GetMac()->SetMcpsDataConfirmCallback (cb2);
+	  device->GetMac()->SetMcpsDataIndicationCallback (cb3);
+
+  }
+
+
+  //actual sending of packets
+  Ptr<LrWpanNetDevice> dev0 = DynamicCast<LrWpanNetDevice> (adHocDevices.Get(0));
+  Ptr<LrWpanNetDevice> dev8 = DynamicCast<LrWpanNetDevice> (adHocDevices.Get(8));
+
+
+
+  // Tracing
   lrWpanHelper.EnablePcapAll (std::string ("lr-wpan-data"), true);
   AsciiTraceHelper ascii;
   Ptr<OutputStreamWrapper> stream = ascii.CreateFileStream ("lr-wpan-data.tr");
   lrWpanHelper.EnableAsciiAll (stream);
 
-
-
-
-  //Add Mobility Model to nodes
-  MobilityHelper mobility;
-  mobility.SetMobilityModel ("ns3::ConstantPositionMobilityModel");
-  mobility.Install (zigBeeNodes);
-
-  //animation
-   AnimationInterface anim ("zigbee_simulation.xml");
-
-  //set the mobility model for the devices.
-  //Mobility model sets the 'physical' position and velocity of the device
-  //x,y,z are location coordinates of device
-  //we will also set their locations in the animation at the same time
-  int x,y,z;
-
-  for( int i = 0; i < NUMBER_OF_NODES; ++i)
-  {
-	  Ptr<LrWpanNetDevice> device = DynamicCast<LrWpanNetDevice> (zigBeeDevices.Get(i));
-	  Ptr<ConstantPositionMobilityModel> sender0Mobility = CreateObject<ConstantPositionMobilityModel> ();
-
-	  //set location to random value
-	  x = rand() % 50;
-	  y = rand() % 50;
-	  z = rand() % 50;
-	  sender0Mobility->SetPosition (Vector (x,y,z));
-	  device->GetPhy()->SetMobility (sender0Mobility);
-
-	  //set location of device in zigbee
-      anim.SetConstantPosition(device->GetNode(), x, y, z);
-
-
-  }
-
-
   // The below should trigger two callbacks when end-to-end data is working
   // 1) DataConfirm callback is called
   // 2) DataIndication callback is called with value of 50
-  Ptr<Packet> p0 = Create<Packet> (50);  // 50 bytes of dummy data
   McpsDataRequestParams params;
   params.m_dstPanId = 0;
-  if (!extended)
-    {
-      params.m_srcAddrMode = SHORT_ADDR;
-      params.m_dstAddrMode = SHORT_ADDR;
-      params.m_dstAddr = Mac16Address ("00:02");
-    }
-  else
-    {
-      params.m_srcAddrMode = EXT_ADDR;
-      params.m_dstAddrMode = EXT_ADDR;
-      params.m_dstExtAddr = Mac64Address ("00:00:00:00:00:00:00:02");
-    }
+  params.m_srcAddrMode = SHORT_ADDR;
+  params.m_dstAddrMode = SHORT_ADDR;
+  params.m_dstAddr = dev0->GetMac()->GetShortAddress();
   params.m_msduHandle = 0;
   params.m_txOptions = TX_OPTION_ACK;
 
-
-  Ptr<LrWpanNetDevice> dev1 = DynamicCast<LrWpanNetDevice> (zigBeeDevices.Get(0));
-
-  //NetDevice* x = zigBeeDevices.Get(0);
-  //LrWpanNetDevice* y = dynamic_cast<LrWpanNetDevice *>(x);
-  dev1->GetMac()->McpsDataRequest(params, p0);
-  Simulator::ScheduleWithContext (1, Seconds (0.0),
-                                  &LrWpanMac::McpsDataRequest,
-								  dev1->GetMac (), params, p0);
-
   // Send a packet back at time 2 seconds
   Ptr<Packet> p2 = Create<Packet> (60);  // 60 bytes of dummy data
-  if (!extended)
-    {
-      params.m_dstAddr = Mac16Address ("00:01");
-    }
-  else
-    {
-      params.m_dstExtAddr = Mac64Address ("00:00:00:00:00:00:00:01");
-    }
 
-  Ptr<LrWpanNetDevice> dev2 = DynamicCast<LrWpanNetDevice> (zigBeeDevices.Get(1));
-  Simulator::ScheduleWithContext (2, Seconds (2.0),
+
+  NS_LOG_UNCOND ("PACKET UID: " << p2->GetUid());
+
+
+  Simulator::ScheduleWithContext (2, Seconds (15.0),
                                   &LrWpanMac::McpsDataRequest,
-								  dev2->GetMac(), params, p2);
+                                  dev8->GetMac(), params, p2);
 
 
-
-
+  Simulator::Stop (Seconds (30));
 
   Simulator::Run ();
+
   Simulator::Destroy ();
   return 0;
 }
