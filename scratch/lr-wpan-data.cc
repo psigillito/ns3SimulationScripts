@@ -22,7 +22,8 @@
 #include "ns3/point-to-point-module.h"
 #include "ns3/v4ping-helper.h"
 #include "ns3/yans-wifi-helper.h"
-
+#include "ns3/energy-module.h"
+#include "ns3/wifi-radio-energy-model-helper.h"
 
 
 using namespace ns3;
@@ -45,6 +46,19 @@ static void DataConfirm (McpsDataConfirmParams params)
 	}
 }
 
+/// Trace function for remaining energy at node.
+static void RemainingEnergy (double oldValue, double remainingEnergy)
+{
+  NS_LOG_UNCOND (Simulator::Now ().GetSeconds ()
+                 << "s Current remaining energy = " << remainingEnergy << "J");
+}
+
+/// Trace function for total energy consumption at node.
+static void TotalEnergy (double oldValue, double totalEnergy)
+{
+  NS_LOG_UNCOND (Simulator::Now ().GetSeconds ()
+                 << "s Total energy consumed by radio = " << totalEnergy << "J");
+}
 
 //how wide the grid will be (# of nodes = GRID_WIDTH * GRIDWIDTH)
 const int GRID_WIDTH = 3;
@@ -81,8 +95,6 @@ int main (int argc, char *argv[])
   adHocNodes.Create(GRID_WIDTH * GRID_WIDTH);
 
 
-
-
   //set up mobility to be static and positioning in a grid
   MobilityHelper mobility;
   mobility.SetMobilityModel ("ns3::ConstantPositionMobilityModel");
@@ -113,6 +125,31 @@ int main (int argc, char *argv[])
    address.SetBase ("10.1.1.0", "255.255.255.0");
    Ipv4InterfaceContainer interfaces = address.Assign (adHocDevices);
 
+  /* energy source */
+  BasicEnergySourceHelper basicSourceHelper;
+  // configure energy source
+  basicSourceHelper.Set ("BasicEnergySourceInitialEnergyJ", DoubleValue (0.1));
+  // install source
+  EnergySourceContainer sources = basicSourceHelper.Install (adHocNodes);
+  /* device energy model */
+  WifiRadioEnergyModelHelper radioEnergyHelper;
+  // configure radio energy model
+  radioEnergyHelper.Set ("TxCurrentA", DoubleValue (0.0174));
+  // install device model
+  DeviceEnergyModelContainer deviceModels = radioEnergyHelper.Install (adHocDevices, sources);
+
+  /** connect trace sources **/
+  /***************************************************************************/
+  // all sources are connected to node 1
+  // energy source
+  Ptr<BasicEnergySource> basicSourcePtr = DynamicCast<BasicEnergySource> (sources.Get (1));
+  basicSourcePtr->TraceConnectWithoutContext ("RemainingEnergy", MakeCallback (&RemainingEnergy));
+  // device energy model
+  Ptr<DeviceEnergyModel> basicRadioModelPtr =
+    basicSourcePtr->FindDeviceEnergyModels ("ns3::WifiRadioEnergyModel").Get (0);
+  NS_ASSERT (basicRadioModelPtr != NULL);
+  basicRadioModelPtr->TraceConnectWithoutContext ("TotalEnergyConsumption", MakeCallback (&TotalEnergy));
+
   //set up callback
   McpsDataConfirmCallback cb0;
   cb0 = MakeCallback (&DataConfirm);
@@ -127,6 +164,7 @@ int main (int argc, char *argv[])
   cb3 = MakeCallback (&DataIndication);
 
   AnimationInterface anim ("PHIL_TEST.xml");
+
 
 
   for(unsigned int i = 0; i < adHocNodes.GetN(); ++i)
@@ -181,6 +219,16 @@ int main (int argc, char *argv[])
   Simulator::Stop (Seconds (30));
 
   Simulator::Run ();
+
+  NS_LOG_UNCOND ("Blargh");
+
+  for (DeviceEnergyModelContainer::Iterator iter = deviceModels.Begin (); iter != deviceModels.End (); iter ++)
+  {
+    double energyConsumed = (*iter)->GetTotalEnergyConsumption ();
+    NS_LOG_UNCOND ("End of simulation (" << Simulator::Now ().GetSeconds ()
+                   << "s) Total energy consumed by radio = " << energyConsumed << "J");
+    NS_ASSERT (energyConsumed <= 0.1);
+  }
 
   Simulator::Destroy ();
   return 0;

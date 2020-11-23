@@ -40,7 +40,6 @@ main (int argc, char *argv[])
   
   //logging results, for research
   Time::SetResolution (Time::NS); //time sampling rate
-  LogComponentEnable ("UdpEchoClientApplication", );
   LogComponentEnable ("UdpEchoServerApplication", LOG_LEVEL_INFO);
 
   //how many nodes we are using gets put in container
