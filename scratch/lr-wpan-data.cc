@@ -1,3 +1,27 @@
+#include <fstream>
+#include "ns3/core-module.h"
+#include "ns3/internet-module.h"
+#include "ns3/internet-apps-module.h"
+#include "ns3/mobility-module.h"
+#include "ns3/spectrum-module.h"
+#include "ns3/propagation-module.h"
+#include "ns3/sixlowpan-module.h"
+#include "ns3/lr-wpan-module.h"
+#include "ns3/csma-module.h"
+#include "ns3/netanim-module.h"
+#include <fstream>
+#include <iostream>
+#include "ns3/core-module.h"
+#include "ns3/network-module.h"
+#include "ns3/internet-module.h"
+#include "ns3/mobility-module.h"
+#include "ns3/aodv-module.h"
+#include "ns3/olsr-module.h"
+#include "ns3/dsdv-module.h"
+#include "ns3/dsr-module.h"
+#include "ns3/applications-module.h"
+#include "ns3/yans-wifi-helper.h"
+
 #include <ns3/log.h>
 #include <ns3/core-module.h>
 #include <ns3/lr-wpan-module.h>
@@ -26,25 +50,13 @@
 #include "ns3/wifi-radio-energy-model-helper.h"
 
 
+
 using namespace ns3;
 
-static void DataIndication (McpsDataIndicationParams params, Ptr<Packet> p)
-{
-	//size of 48 is sent by aodv routing protocol beacons?
-  if(p->GetSize() != 48)
-  {
-	  NS_LOG_UNCOND ("Received packet of size " << p->GetSize ());
-  }
-}
 
-static void DataConfirm (McpsDataConfirmParams params)
-{
-	// 0 = success
-	if(params.m_status != 0)
-	{
-		  NS_LOG_UNCOND ("BAD DATA CONFIRM STATUS: " << params.m_status);
-	}
-}
+int bytesTotal{0};
+int packetsReceived{0};
+double TotalTime{200.0};
 
 /// Trace function for remaining energy at node.
 static void RemainingEnergy (double oldValue, double remainingEnergy)
@@ -60,176 +72,182 @@ static void TotalEnergy (double oldValue, double totalEnergy)
                  << "s Total energy consumed by radio = " << totalEnergy << "J");
 }
 
-//how wide the grid will be (# of nodes = GRID_WIDTH * GRIDWIDTH)
-const int GRID_WIDTH = 3;
 
-int main (int argc, char *argv[])
+static inline std::string
+PrintReceivedPacket (Ptr<Socket> socket, Ptr<Packet> packet, Address senderAddress)
 {
-  bool verbose = false;
-  bool extended = false;
+  std::ostringstream oss;
 
-  CommandLine cmd (__FILE__);
-  cmd.AddValue ("verbose", "turn on all log components", verbose);
-  cmd.AddValue ("extended", "use extended addressing", extended);
-  cmd.Parse (argc, argv);
+  oss << Simulator::Now ().GetSeconds () << " " << socket->GetNode ()->GetId ();
 
-  LrWpanHelper lrWpanHelper;
-  if (verbose)
-  {
-	  lrWpanHelper.EnableLogComponents ();
-  }
-
-  //Config::SetDefault  ("ns3::OnOffApplication::PacketSize",StringValue ("64"));
-  //Config::SetDefault ("ns3::OnOffApplication::DataRate",  StringValue ("2048bps"));
-
-  // Each device must be attached to the same channel
-  Ptr<SingleModelSpectrumChannel> channel = CreateObject<SingleModelSpectrumChannel> ();
-  Ptr<LogDistancePropagationLossModel> propModel = CreateObject<LogDistancePropagationLossModel> ();
-  Ptr<ConstantSpeedPropagationDelayModel> delayModel = CreateObject<ConstantSpeedPropagationDelayModel> ();
-  channel->AddPropagationLossModel (propModel);
-  channel->SetPropagationDelayModel (delayModel);
-  lrWpanHelper.SetChannel(channel);
-
-  //Create our base nodes
-  NodeContainer adHocNodes;
-  adHocNodes.Create(GRID_WIDTH * GRID_WIDTH);
+  if (InetSocketAddress::IsMatchingType (senderAddress))
+    {
+      InetSocketAddress addr = InetSocketAddress::ConvertFrom (senderAddress);
+      oss << " received one packet from " << addr.GetIpv4 ();
+    }
+  else
+    {
+      oss << " received one packet!";
+    }
+  return oss.str ();
+}
 
 
-  //set up mobility to be static and positioning in a grid
-  MobilityHelper mobility;
-  mobility.SetMobilityModel ("ns3::ConstantPositionMobilityModel");
+void
+ReceivePacket (Ptr<Socket> socket)
+{
+  Ptr<Packet> packet;
+  Address senderAddress;
+  while ((packet = socket->RecvFrom (senderAddress)))
+    {
+      bytesTotal += packet->GetSize ();
+      packetsReceived += 1;
+      NS_LOG_UNCOND (PrintReceivedPacket (socket, packet, senderAddress));
+    }
+}
 
-  mobility.SetPositionAllocator ("ns3::GridPositionAllocator",
+
+int main (int argc, char** argv)
+{
+    Packet::EnablePrinting ();
+
+    std::string rate ("2048bps");
+    std::string phyMode ("DsssRate11Mbps");
+    std::string tr_name ("manet-routing-compare");
+
+    Config::SetDefault  ("ns3::OnOffApplication::PacketSize",StringValue ("64"));
+    Config::SetDefault ("ns3::OnOffApplication::DataRate",  StringValue (rate));
+    Config::SetDefault ("ns3::WifiRemoteStationManager::NonUnicastMode",StringValue (phyMode));
+
+
+
+
+    //************************ create nodes ******************************************
+    int nodes_count = 20;
+    NodeContainer nodes;
+    nodes.Create(nodes_count);
+
+    //***********************set up net devices / Wifi Mac and Physical ************
+    WifiHelper wifi;
+    wifi.SetStandard (WIFI_STANDARD_80211b);
+
+    YansWifiPhyHelper wifiPhy =  YansWifiPhyHelper::Default ();
+    YansWifiChannelHelper wifiChannel;
+    wifiChannel.SetPropagationDelay ("ns3::ConstantSpeedPropagationDelayModel");
+    wifiChannel.AddPropagationLoss ("ns3::FriisPropagationLossModel");
+    wifiPhy.SetChannel (wifiChannel.Create ());
+
+    WifiMacHelper wifiMac;
+    wifi.SetRemoteStationManager ("ns3::ConstantRateWifiManager",
+                                  "DataMode",StringValue (phyMode),
+                                  "ControlMode",StringValue (phyMode));
+
+    wifiPhy.Set ("TxPowerStart",DoubleValue (7.5));
+    wifiPhy.Set ("TxPowerEnd", DoubleValue (7.5));
+
+    wifiMac.SetType ("ns3::AdhocWifiMac");
+    NetDeviceContainer adhocDevices = wifi.Install (wifiPhy, wifiMac, nodes);
+
+    /*********************** set mobility  *************/
+
+    //set the mobility on our nodes
+    MobilityHelper mobility;
+    mobility.SetMobilityModel ("ns3::ConstantPositionMobilityModel");
+    mobility.SetPositionAllocator ("ns3::GridPositionAllocator",
                                    "MinX", DoubleValue (0.0),
                                    "MinY", DoubleValue (0.0),
-                                   "DeltaX", DoubleValue (100),
-                                   "DeltaY", DoubleValue (100),
-                                   "GridWidth", UintegerValue (3),
+                                   "DeltaX", DoubleValue (80),
+                                   "DeltaY", DoubleValue (80),
+                                   "GridWidth", UintegerValue (10),
                                    "LayoutType", StringValue ("RowFirst"));
+    mobility.SetMobilityModel ("ns3::ConstantPositionMobilityModel");
+    mobility.Install (nodes);
 
-    mobility.Install (adHocNodes);
-
+    /*********************** set up routing **********************/
 
     AodvHelper aodv;
-   // you can configure AODV attributes here using aodv.Set(name, value)
+    InternetStackHelper internet;
 
-   InternetStackHelper internet;
-   internet.SetRoutingHelper (aodv); // has effect on the next Install ()
-   internet.Install (adHocNodes);
+    internet.SetRoutingHelper(aodv);
+    internet.Install (nodes);
 
+    Ipv4AddressHelper addressAdhoc;
+    addressAdhoc.SetBase ("10.1.1.0", "255.255.255.0");
+    Ipv4InterfaceContainer adhocInterfaces;
+    adhocInterfaces = addressAdhoc.Assign (adhocDevices);
 
-   //Install Devices on nodes
-   NetDeviceContainer adHocDevices = lrWpanHelper.Install(adHocNodes);
+    /***************************** ON/OFF device behaviour **********/
+    OnOffHelper onoff1 ("ns3::UdpSocketFactory",Address ());
+    onoff1.SetAttribute ("OnTime", StringValue ("ns3::ConstantRandomVariable[Constant=1.0]"));
+    onoff1.SetAttribute ("OffTime", StringValue ("ns3::ConstantRandomVariable[Constant=0.0]"));
 
-   Ipv4AddressHelper address;
-   address.SetBase ("10.1.1.0", "255.255.255.0");
-   Ipv4InterfaceContainer interfaces = address.Assign (adHocDevices);
+    /************************** Energy Model ************************/
 
-  /* energy source */
-  BasicEnergySourceHelper basicSourceHelper;
-  // configure energy source
-  basicSourceHelper.Set ("BasicEnergySourceInitialEnergyJ", DoubleValue (0.1));
-  // install source
-  EnergySourceContainer sources = basicSourceHelper.Install (adHocNodes);
-  /* device energy model */
-  WifiRadioEnergyModelHelper radioEnergyHelper;
-  // configure radio energy model
-  radioEnergyHelper.Set ("TxCurrentA", DoubleValue (0.0174));
-  // install device model
-  DeviceEnergyModelContainer deviceModels = radioEnergyHelper.Install (adHocDevices, sources);
+    /* energy source */
+    BasicEnergySourceHelper basicSourceHelper;
+    // configure energy source
+    basicSourceHelper.Set ("BasicEnergySourceInitialEnergyJ", DoubleValue (0.1));
+    // install source
+    EnergySourceContainer sources = basicSourceHelper.Install (nodes);
+    /* device energy model */
+    WifiRadioEnergyModelHelper radioEnergyHelper;
+    // configure radio energy model
+    radioEnergyHelper.Set ("TxCurrentA", DoubleValue (0.0174));
+    // install device model
+    DeviceEnergyModelContainer deviceModels = radioEnergyHelper.Install (adhocDevices, sources);
 
-  /** connect trace sources **/
-  /***************************************************************************/
-  // all sources are connected to node 1
-  // energy source
-  Ptr<BasicEnergySource> basicSourcePtr = DynamicCast<BasicEnergySource> (sources.Get (1));
-  basicSourcePtr->TraceConnectWithoutContext ("RemainingEnergy", MakeCallback (&RemainingEnergy));
-  // device energy model
-  Ptr<DeviceEnergyModel> basicRadioModelPtr =
+    /** connect trace sources **/
+    /***************************************************************************/
+    // all sources are connected to node 1
+    // energy source
+    Ptr<BasicEnergySource> basicSourcePtr = DynamicCast<BasicEnergySource> (sources.Get (1));
+    basicSourcePtr->TraceConnectWithoutContext ("RemainingEnergy", MakeCallback (&RemainingEnergy));
+    // device energy model
+    Ptr<DeviceEnergyModel> basicRadioModelPtr =
     basicSourcePtr->FindDeviceEnergyModels ("ns3::WifiRadioEnergyModel").Get (0);
-  NS_ASSERT (basicRadioModelPtr != NULL);
-  basicRadioModelPtr->TraceConnectWithoutContext ("TotalEnergyConsumption", MakeCallback (&TotalEnergy));
-
-  //set up callback
-  McpsDataConfirmCallback cb0;
-  cb0 = MakeCallback (&DataConfirm);
-
-  McpsDataIndicationCallback cb1;
-  cb1 = MakeCallback (&DataIndication);
-
-  McpsDataConfirmCallback cb2;
-  cb2 = MakeCallback (&DataConfirm);
-
-  McpsDataIndicationCallback cb3;
-  cb3 = MakeCallback (&DataIndication);
-
-  AnimationInterface anim ("PHIL_TEST.xml");
+    NS_ASSERT (basicRadioModelPtr != NULL);
+    basicRadioModelPtr->TraceConnectWithoutContext ("TotalEnergyConsumption", MakeCallback (&TotalEnergy));
 
 
+    /***************** Sending Packets *****************************/
+    for (int i = 0; i < 5; i++)
+      {
+        TypeId tid = TypeId::LookupByName ("ns3::UdpSocketFactory");
+        Ptr<Socket> sink = Socket::CreateSocket (nodes.Get(1), tid);
+        InetSocketAddress local = InetSocketAddress (adhocInterfaces.GetAddress (1), 9/*port number*/);
+        sink->Bind (local);
+        sink->SetRecvCallback (MakeCallback (ReceivePacket));
 
-  for(unsigned int i = 0; i < adHocNodes.GetN(); ++i)
-  {
+        AddressValue remoteAddress (InetSocketAddress (adhocInterfaces.GetAddress (1), 9));
+        onoff1.SetAttribute ("Remote", remoteAddress);
 
-	  //set address, this is a bad way to do this
-	  Ptr<LrWpanNetDevice> device = DynamicCast<LrWpanNetDevice> (adHocDevices.Get(i));
-
-	  device->GetMac()->SetMcpsDataConfirmCallback (cb0);
-	  device->GetMac()->SetMcpsDataIndicationCallback (cb1);
-	  device->GetMac()->SetMcpsDataConfirmCallback (cb2);
-	  device->GetMac()->SetMcpsDataIndicationCallback (cb3);
-
-  }
-
-
-  //actual sending of packets
-  Ptr<LrWpanNetDevice> dev0 = DynamicCast<LrWpanNetDevice> (adHocDevices.Get(0));
-  Ptr<LrWpanNetDevice> dev8 = DynamicCast<LrWpanNetDevice> (adHocDevices.Get(8));
-
+        Ptr<UniformRandomVariable> var = CreateObject<UniformRandomVariable> ();
+        ApplicationContainer temp = onoff1.Install (nodes.Get(19));
+        temp.Start (Seconds (var->GetValue (100.0,101.0)));
+        temp.Stop (Seconds (TotalTime));
+      }
 
 
-  // Tracing
-  lrWpanHelper.EnablePcapAll (std::string ("lr-wpan-data"), true);
-  AsciiTraceHelper ascii;
-  Ptr<OutputStreamWrapper> stream = ascii.CreateFileStream ("lr-wpan-data.tr");
-  lrWpanHelper.EnableAsciiAll (stream);
-
-  // The below should trigger two callbacks when end-to-end data is working
-  // 1) DataConfirm callback is called
-  // 2) DataIndication callback is called with value of 50
-  McpsDataRequestParams params;
-  params.m_dstPanId = 0;
-  params.m_srcAddrMode = SHORT_ADDR;
-  params.m_dstAddrMode = SHORT_ADDR;
-  params.m_dstAddr = dev0->GetMac()->GetShortAddress();
-  params.m_msduHandle = 0;
-  params.m_txOptions = TX_OPTION_ACK;
-
-  // Send a packet back at time 2 seconds
-  Ptr<Packet> p2 = Create<Packet> (60);  // 60 bytes of dummy data
+    NS_LOG_UNCOND ("RUNNNING EXPERIMENT");
 
 
-  NS_LOG_UNCOND ("PACKET UID: " << p2->GetUid());
+    AnimationInterface anim ("PHIL_TEST.xml");
+
+    Simulator::Stop (Seconds (TotalTime));
+    Simulator::Run ();
+
+    NS_LOG_UNCOND ("Blargh");
+
+    for (DeviceEnergyModelContainer::Iterator iter = deviceModels.Begin (); iter != deviceModels.End (); iter ++)
+    {
+      double energyConsumed = (*iter)->GetTotalEnergyConsumption ();
+      NS_LOG_UNCOND ("End of simulation (" << Simulator::Now ().GetSeconds ()
+                     << "s) Total energy consumed by radio = " << energyConsumed << "J");
+      NS_ASSERT (energyConsumed <= 0.1);
+    }
 
 
-  Simulator::ScheduleWithContext (2, Seconds (15.0),
-                                  &LrWpanMac::McpsDataRequest,
-                                  dev8->GetMac(), params, p2);
+    Simulator::Destroy ();
 
 
-  Simulator::Stop (Seconds (30));
-
-  Simulator::Run ();
-
-  NS_LOG_UNCOND ("Blargh");
-
-  for (DeviceEnergyModelContainer::Iterator iter = deviceModels.Begin (); iter != deviceModels.End (); iter ++)
-  {
-    double energyConsumed = (*iter)->GetTotalEnergyConsumption ();
-    NS_LOG_UNCOND ("End of simulation (" << Simulator::Now ().GetSeconds ()
-                   << "s) Total energy consumed by radio = " << energyConsumed << "J");
-    NS_ASSERT (energyConsumed <= 0.1);
-  }
-
-  Simulator::Destroy ();
-  return 0;
 }
