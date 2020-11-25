@@ -1,4 +1,4 @@
-#include <fstream>
+//TODO: a lot of these includes are leftovers from experimental changes.
 #include "ns3/core-module.h"
 #include "ns3/internet-module.h"
 #include "ns3/internet-apps-module.h"
@@ -9,51 +9,34 @@
 #include "ns3/lr-wpan-module.h"
 #include "ns3/csma-module.h"
 #include "ns3/netanim-module.h"
-#include <fstream>
-#include <iostream>
-#include "ns3/core-module.h"
 #include "ns3/network-module.h"
-#include "ns3/internet-module.h"
-#include "ns3/mobility-module.h"
 #include "ns3/aodv-module.h"
 #include "ns3/olsr-module.h"
 #include "ns3/dsdv-module.h"
 #include "ns3/dsr-module.h"
 #include "ns3/applications-module.h"
 #include "ns3/yans-wifi-helper.h"
-
-/*TODO this needs to get cleaned up, I was lazy with the copy-pasta*/
 #include <ns3/log.h>
-#include <ns3/core-module.h>
-#include <ns3/lr-wpan-module.h>
 #include <ns3/propagation-loss-model.h>
 #include <ns3/propagation-delay-model.h>
 #include <ns3/simulator.h>
 #include <ns3/single-model-spectrum-channel.h>
 #include <ns3/constant-position-mobility-model.h>
 #include <ns3/packet.h>
-#include <iostream>
-#include <string>
-#include <cmath>
-#include "ns3/netanim-module.h"
-#include "ns3/sixlowpan-module.h"
-#include "ns3/applications-module.h"
 #include "ns3/config-store-module.h"
 #include "ns3/dsdv-helper.h"
-#include "ns3/aodv-module.h"
-#include "ns3/network-module.h"
-#include "ns3/internet-module.h"
-#include "ns3/mobility-module.h"
 #include "ns3/point-to-point-module.h"
 #include "ns3/v4ping-helper.h"
-#include "ns3/yans-wifi-helper.h"
 #include "ns3/energy-module.h"
 #include "ns3/wifi-radio-energy-model-helper.h"
 
+#include <string>
+#include <cmath>
+#include <iostream>
+#include <fstream>
 
 
 using namespace ns3;
-
 
 int bytesTotal{0};
 int packetsReceived{0};
@@ -94,8 +77,7 @@ PrintReceivedPacket (Ptr<Socket> socket, Ptr<Packet> packet, Address senderAddre
 }
 
 
-void
-ReceivePacket (Ptr<Socket> socket)
+void ReceivePacket (Ptr<Socket> socket)
 {
   Ptr<Packet> packet;
   Address senderAddress;
@@ -108,30 +90,63 @@ ReceivePacket (Ptr<Socket> socket)
 }
 
 
-int main (int argc, char** argv)
+//for each node in the list send to individual packet to each other node.
+//this loop completes before simulation starts so packets are not going to be reported received in any particular order.
+void setup_packets_to_be_sent(NodeContainer& nodes, Ipv4InterfaceContainer& adhocInterfaces, OnOffHelper& onoff1 )
 {
-	//convert to int
-	auto routing_protocol = std::stoi(argv[1]);
+	TypeId tid = TypeId::LookupByName ("ns3::UdpSocketFactory");
 
-	Packet::EnablePrinting ();
+	for (unsigned int i = 0; i < nodes.GetN(); i++)
+	{
+		for( unsigned int j = 0; j < nodes.GetN(); ++j)
+		{
+			Ptr<Socket> sink = Socket::CreateSocket (nodes.Get(i), tid);
+			InetSocketAddress local = InetSocketAddress (adhocInterfaces.GetAddress (i), 9/*port number*/);
+			sink->Bind (local);
+			sink->SetRecvCallback (MakeCallback (ReceivePacket));
 
-    std::string rate ("2048bps");
-    std::string phyMode ("DsssRate11Mbps");
-    std::string tr_name ("manet-routing-compare");
+			AddressValue remoteAddress (InetSocketAddress (adhocInterfaces.GetAddress (i), 9));
+			onoff1.SetAttribute ("Remote", remoteAddress);
 
-    Config::SetDefault  ("ns3::OnOffApplication::PacketSize",StringValue ("64"));
-    Config::SetDefault ("ns3::OnOffApplication::DataRate",  StringValue (rate));
-    Config::SetDefault ("ns3::WifiRemoteStationManager::NonUnicastMode",StringValue (phyMode));
+			Ptr<UniformRandomVariable> var = CreateObject<UniformRandomVariable> ();
 
+			ApplicationContainer temp = onoff1.Install (nodes.Get(j));
+			temp.Start (Seconds (var->GetValue (100.0,101.0)));
+			temp.Stop (Seconds (TotalTime));
+		}
+	  }
+}
 
+InternetStackHelper setup_internet_stack( int routing_protocol)
+{
 
+	InternetStackHelper internet;
+	OlsrHelper olsr;
+    AodvHelper aodv;
+    DsdvHelper dsdv;
 
-    //************************ create nodes ******************************************
-    int nodes_count = 20;
-    NodeContainer nodes;
-    nodes.Create(nodes_count);
+    switch( routing_protocol)
+        {
+        case 1:
+            NS_LOG_UNCOND ("AODV ROUTING ENABLED");
+            internet.SetRoutingHelper(aodv);
+        	break;
+        case 2:
+            NS_LOG_UNCOND ("OLSR ROUTING ENABLED");
+            internet.SetRoutingHelper(olsr);
+        	break;
+        case 3:
+            NS_LOG_UNCOND ("DSDV ROUTING ENABLED");
+            internet.SetRoutingHelper(dsdv);
+        	break;
+        }
 
-    //***********************set up net devices / Wifi Mac and Physical ************
+    internet.SetRoutingHelper(aodv);
+    return internet;
+}
+
+NetDeviceContainer setup_net_devices( NodeContainer& nodes, std::string phyMode)
+{
     WifiHelper wifi;
     wifi.SetStandard (WIFI_STANDARD_80211b);
 
@@ -150,11 +165,12 @@ int main (int argc, char** argv)
     wifiPhy.Set ("TxPowerEnd", DoubleValue (7.5));
 
     wifiMac.SetType ("ns3::AdhocWifiMac");
-    NetDeviceContainer adhocDevices = wifi.Install (wifiPhy, wifiMac, nodes);
 
-    /*********************** set mobility  *************/
+    return wifi.Install (wifiPhy, wifiMac, nodes);
+}
 
-    //set the mobility on our nodes
+MobilityHelper setup_mobility()
+{
     MobilityHelper mobility;
     mobility.SetMobilityModel ("ns3::ConstantPositionMobilityModel");
     mobility.SetPositionAllocator ("ns3::GridPositionAllocator",
@@ -165,34 +181,45 @@ int main (int argc, char** argv)
                                    "GridWidth", UintegerValue (10),
                                    "LayoutType", StringValue ("RowFirst"));
     mobility.SetMobilityModel ("ns3::ConstantPositionMobilityModel");
+
+	return mobility;
+}
+
+
+
+
+int main (int argc, char** argv)
+{
+	//first arg is routing protocol 1 = aodv, 2 = olsr, 3 = dsdv
+	auto routing_protocol = std::stoi(argv[1]);
+	auto nodes_count = std::stoi(argv[2]);
+
+    NS_LOG_UNCOND ("NODES IN EXPERIMENT " + std::string(argv[2]));
+
+	Packet::EnablePrinting ();
+
+    std::string rate ("2048bps");
+    std::string phyMode ("DsssRate11Mbps");
+    std::string tr_name ("manet-routing-compare");
+
+    Config::SetDefault  ("ns3::OnOffApplication::PacketSize",StringValue ("64"));
+    Config::SetDefault ("ns3::OnOffApplication::DataRate",  StringValue (rate));
+    Config::SetDefault ("ns3::WifiRemoteStationManager::NonUnicastMode",StringValue (phyMode));
+
+
+    //Create Nodes
+    NodeContainer nodes;
+    nodes.Create(nodes_count);
+
+    //Create configured Net Devices (wifi and physical layer setup)
+    NetDeviceContainer adhocDevices = setup_net_devices(nodes, phyMode);
+
+    // Set Mobility
+    MobilityHelper mobility = setup_mobility();
     mobility.Install (nodes);
 
-    /*********************** set up routing **********************/
-
-    InternetStackHelper internet;
-
-	OlsrHelper olsr;
-    AodvHelper aodv;
-    DsdvHelper dsdv;
-
-
-    switch( routing_protocol)
-    {
-    case 1:
-        NS_LOG_UNCOND ("AODV ROUTING ENABLED");
-        internet.SetRoutingHelper(aodv);
-    	break;
-    case 2:
-        NS_LOG_UNCOND ("OLSR ROUTING ENABLED");
-        internet.SetRoutingHelper(olsr);
-    	break;
-    case 3:
-        NS_LOG_UNCOND ("DSDV ROUTING ENABLED");
-        internet.SetRoutingHelper(dsdv);
-    	break;
-    }
-
-    internet.SetRoutingHelper(aodv);
+    //Set Routing and Network Layer
+    InternetStackHelper internet = setup_internet_stack(routing_protocol);
     internet.Install (nodes);
 
     Ipv4AddressHelper addressAdhoc;
@@ -200,7 +227,7 @@ int main (int argc, char** argv)
     Ipv4InterfaceContainer adhocInterfaces;
     adhocInterfaces = addressAdhoc.Assign (adhocDevices);
 
-    /***************************** ON/OFF device behaviour **********/
+    // ON/OFF device behaviour
     OnOffHelper onoff1 ("ns3::UdpSocketFactory",Address ());
     onoff1.SetAttribute ("OnTime", StringValue ("ns3::ConstantRandomVariable[Constant=1.0]"));
     onoff1.SetAttribute ("OffTime", StringValue ("ns3::ConstantRandomVariable[Constant=0.0]"));
@@ -233,35 +260,10 @@ int main (int argc, char** argv)
     basicRadioModelPtr->TraceConnectWithoutContext ("TotalEnergyConsumption", MakeCallback (&TotalEnergy));
 */
 
-    /***************** Sending Packets *********************/
-    //for each node in the list send to individual packet to each other node.
-    //this loop completes before simulation starts so packets are not going to be reported received in any particular order.
-    TypeId tid = TypeId::LookupByName ("ns3::UdpSocketFactory");
+    //Setup packets that will be sent during the simulation.
+    setup_packets_to_be_sent(nodes, adhocInterfaces, onoff1 );
 
-    for (unsigned int i = 0; i < nodes.GetN(); i++)
-    {
-        for( unsigned int j = 0; j < nodes.GetN(); ++j)
-        {
-         	Ptr<Socket> sink = Socket::CreateSocket (nodes.Get(i), tid);
-			InetSocketAddress local = InetSocketAddress (adhocInterfaces.GetAddress (i), 9/*port number*/);
-			sink->Bind (local);
-			sink->SetRecvCallback (MakeCallback (ReceivePacket));
-
-			AddressValue remoteAddress (InetSocketAddress (adhocInterfaces.GetAddress (i), 9));
-			onoff1.SetAttribute ("Remote", remoteAddress);
-
-			Ptr<UniformRandomVariable> var = CreateObject<UniformRandomVariable> ();
-
-            ApplicationContainer temp = onoff1.Install (nodes.Get(j));
-            temp.Start (Seconds (var->GetValue (100.0,101.0)));
-            temp.Stop (Seconds (TotalTime));
-        }
-      }
-
-
-    NS_LOG_UNCOND ("RUNNNING EXPERIMENT");
-
-
+    //creating animation interface will create xml runnable by netanim
     AnimationInterface anim ("PHIL_TEST.xml");
 
     Simulator::Stop (Seconds (TotalTime));
