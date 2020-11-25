@@ -22,6 +22,7 @@
 #include "ns3/applications-module.h"
 #include "ns3/yans-wifi-helper.h"
 
+/*TODO this needs to get cleaned up, I was lazy with the copy-pasta*/
 #include <ns3/log.h>
 #include <ns3/core-module.h>
 #include <ns3/lr-wpan-module.h>
@@ -59,7 +60,7 @@ int packetsReceived{0};
 double TotalTime{200.0};
 
 /// Trace function for remaining energy at node.
-static void RemainingEnergy (double oldValue, double remainingEnergy)
+/*static void RemainingEnergy (double oldValue, double remainingEnergy)
 {
   NS_LOG_UNCOND (Simulator::Now ().GetSeconds ()
                  << "s Current remaining energy = " << remainingEnergy << "J");
@@ -71,7 +72,7 @@ static void TotalEnergy (double oldValue, double totalEnergy)
   NS_LOG_UNCOND (Simulator::Now ().GetSeconds ()
                  << "s Total energy consumed by radio = " << totalEnergy << "J");
 }
-
+*/
 
 static inline std::string
 PrintReceivedPacket (Ptr<Socket> socket, Ptr<Packet> packet, Address senderAddress)
@@ -109,7 +110,10 @@ ReceivePacket (Ptr<Socket> socket)
 
 int main (int argc, char** argv)
 {
-    Packet::EnablePrinting ();
+	//convert to int
+	auto routing_protocol = std::stoi(argv[1]);
+
+	Packet::EnablePrinting ();
 
     std::string rate ("2048bps");
     std::string phyMode ("DsssRate11Mbps");
@@ -165,8 +169,28 @@ int main (int argc, char** argv)
 
     /*********************** set up routing **********************/
 
-    AodvHelper aodv;
     InternetStackHelper internet;
+
+	OlsrHelper olsr;
+    AodvHelper aodv;
+    DsdvHelper dsdv;
+
+
+    switch( routing_protocol)
+    {
+    case 1:
+        NS_LOG_UNCOND ("AODV ROUTING ENABLED");
+        internet.SetRoutingHelper(aodv);
+    	break;
+    case 2:
+        NS_LOG_UNCOND ("OLSR ROUTING ENABLED");
+        internet.SetRoutingHelper(olsr);
+    	break;
+    case 3:
+        NS_LOG_UNCOND ("DSDV ROUTING ENABLED");
+        internet.SetRoutingHelper(dsdv);
+    	break;
+    }
 
     internet.SetRoutingHelper(aodv);
     internet.Install (nodes);
@@ -183,48 +207,55 @@ int main (int argc, char** argv)
 
     /************************** Energy Model ************************/
 
-    /* energy source */
-    BasicEnergySourceHelper basicSourceHelper;
+    // energy source
+ /*   BasicEnergySourceHelper basicSourceHelper;
     // configure energy source
     basicSourceHelper.Set ("BasicEnergySourceInitialEnergyJ", DoubleValue (0.1));
     // install source
     EnergySourceContainer sources = basicSourceHelper.Install (nodes);
-    /* device energy model */
+    // device energy model
     WifiRadioEnergyModelHelper radioEnergyHelper;
     // configure radio energy model
     radioEnergyHelper.Set ("TxCurrentA", DoubleValue (0.0174));
     // install device model
     DeviceEnergyModelContainer deviceModels = radioEnergyHelper.Install (adhocDevices, sources);
-
+*/
     /** connect trace sources **/
     /***************************************************************************/
     // all sources are connected to node 1
     // energy source
-    Ptr<BasicEnergySource> basicSourcePtr = DynamicCast<BasicEnergySource> (sources.Get (1));
+/*    Ptr<BasicEnergySource> basicSourcePtr = DynamicCast<BasicEnergySource> (sources.Get (1));
     basicSourcePtr->TraceConnectWithoutContext ("RemainingEnergy", MakeCallback (&RemainingEnergy));
     // device energy model
     Ptr<DeviceEnergyModel> basicRadioModelPtr =
     basicSourcePtr->FindDeviceEnergyModels ("ns3::WifiRadioEnergyModel").Get (0);
     NS_ASSERT (basicRadioModelPtr != NULL);
     basicRadioModelPtr->TraceConnectWithoutContext ("TotalEnergyConsumption", MakeCallback (&TotalEnergy));
+*/
 
+    /***************** Sending Packets *********************/
+    //for each node in the list send to individual packet to each other node.
+    //this loop completes before simulation starts so packets are not going to be reported received in any particular order.
+    TypeId tid = TypeId::LookupByName ("ns3::UdpSocketFactory");
 
-    /***************** Sending Packets *****************************/
-    for (int i = 0; i < 5; i++)
-      {
-        TypeId tid = TypeId::LookupByName ("ns3::UdpSocketFactory");
-        Ptr<Socket> sink = Socket::CreateSocket (nodes.Get(1), tid);
-        InetSocketAddress local = InetSocketAddress (adhocInterfaces.GetAddress (1), 9/*port number*/);
-        sink->Bind (local);
-        sink->SetRecvCallback (MakeCallback (ReceivePacket));
+    for (unsigned int i = 0; i < nodes.GetN(); i++)
+    {
+        for( unsigned int j = 0; j < nodes.GetN(); ++j)
+        {
+         	Ptr<Socket> sink = Socket::CreateSocket (nodes.Get(i), tid);
+			InetSocketAddress local = InetSocketAddress (adhocInterfaces.GetAddress (i), 9/*port number*/);
+			sink->Bind (local);
+			sink->SetRecvCallback (MakeCallback (ReceivePacket));
 
-        AddressValue remoteAddress (InetSocketAddress (adhocInterfaces.GetAddress (1), 9));
-        onoff1.SetAttribute ("Remote", remoteAddress);
+			AddressValue remoteAddress (InetSocketAddress (adhocInterfaces.GetAddress (i), 9));
+			onoff1.SetAttribute ("Remote", remoteAddress);
 
-        Ptr<UniformRandomVariable> var = CreateObject<UniformRandomVariable> ();
-        ApplicationContainer temp = onoff1.Install (nodes.Get(19));
-        temp.Start (Seconds (var->GetValue (100.0,101.0)));
-        temp.Stop (Seconds (TotalTime));
+			Ptr<UniformRandomVariable> var = CreateObject<UniformRandomVariable> ();
+
+            ApplicationContainer temp = onoff1.Install (nodes.Get(j));
+            temp.Start (Seconds (var->GetValue (100.0,101.0)));
+            temp.Stop (Seconds (TotalTime));
+        }
       }
 
 
@@ -238,13 +269,13 @@ int main (int argc, char** argv)
 
     NS_LOG_UNCOND ("Blargh");
 
-    for (DeviceEnergyModelContainer::Iterator iter = deviceModels.Begin (); iter != deviceModels.End (); iter ++)
+    /*for (DeviceEnergyModelContainer::Iterator iter = deviceModels.Begin (); iter != deviceModels.End (); iter ++)
     {
       double energyConsumed = (*iter)->GetTotalEnergyConsumption ();
       NS_LOG_UNCOND ("End of simulation (" << Simulator::Now ().GetSeconds ()
                      << "s) Total energy consumed by radio = " << energyConsumed << "J");
       NS_ASSERT (energyConsumed <= 0.1);
-    }
+    }*/
 
 
     Simulator::Destroy ();
