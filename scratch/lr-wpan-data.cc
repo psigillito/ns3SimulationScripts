@@ -43,7 +43,7 @@ int packetsReceived{0};
 double TotalTime{200.0};
 
 /// Trace function for remaining energy at node.
-/*static void RemainingEnergy (double oldValue, double remainingEnergy)
+static void RemainingEnergy (double oldValue, double remainingEnergy)
 {
   NS_LOG_UNCOND (Simulator::Now ().GetSeconds ()
                  << "s Current remaining energy = " << remainingEnergy << "J");
@@ -55,7 +55,7 @@ static void TotalEnergy (double oldValue, double totalEnergy)
   NS_LOG_UNCOND (Simulator::Now ().GetSeconds ()
                  << "s Total energy consumed by radio = " << totalEnergy << "J");
 }
-*/
+
 
 static inline std::string
 PrintReceivedPacket (Ptr<Socket> socket, Ptr<Packet> packet, Address senderAddress)
@@ -186,11 +186,16 @@ MobilityHelper setup_mobility()
 }
 
 
-
-
 int main (int argc, char** argv)
 {
-	//first arg is routing protocol 1 = aodv, 2 = olsr, 3 = dsdv
+
+    LogComponentEnable ("EnergySource", LOG_LEVEL_DEBUG);
+    LogComponentEnable ("BasicEnergySource", LOG_LEVEL_DEBUG);
+    LogComponentEnable ("DeviceEnergyModel", LOG_LEVEL_DEBUG);
+    LogComponentEnable ("WifiRadioEnergyModel", LOG_LEVEL_DEBUG);
+    
+
+	// first arg is routing protocol 1 = aodv, 2 = olsr, 3 = dsdv
 	auto routing_protocol = std::stoi(argv[1]);
 	auto nodes_count = std::stoi(argv[2]);
 
@@ -206,19 +211,18 @@ int main (int argc, char** argv)
     Config::SetDefault ("ns3::OnOffApplication::DataRate",  StringValue (rate));
     Config::SetDefault ("ns3::WifiRemoteStationManager::NonUnicastMode",StringValue (phyMode));
 
-
-    //Create Nodes
+    // Create Nodes
     NodeContainer nodes;
     nodes.Create(nodes_count);
 
-    //Create configured Net Devices (wifi and physical layer setup)
+    // Create configured Net Devices (wifi and physical layer setup)
     NetDeviceContainer adhocDevices = setup_net_devices(nodes, phyMode);
 
     // Set Mobility
     MobilityHelper mobility = setup_mobility();
     mobility.Install (nodes);
 
-    //Set Routing and Network Layer
+    // Set Routing and Network Layer
     InternetStackHelper internet = setup_internet_stack(routing_protocol);
     internet.Install (nodes);
 
@@ -235,7 +239,7 @@ int main (int argc, char** argv)
     /************************** Energy Model ************************/
 
     // energy source
- /*   BasicEnergySourceHelper basicSourceHelper;
+    BasicEnergySourceHelper basicSourceHelper;
     // configure energy source
     basicSourceHelper.Set ("BasicEnergySourceInitialEnergyJ", DoubleValue (0.1));
     // install source
@@ -246,19 +250,33 @@ int main (int argc, char** argv)
     radioEnergyHelper.Set ("TxCurrentA", DoubleValue (0.0174));
     // install device model
     DeviceEnergyModelContainer deviceModels = radioEnergyHelper.Install (adhocDevices, sources);
-*/
-    /** connect trace sources **/
+
+    /* energy harvester */
+    BasicEnergyHarvesterHelper basicHarvesterHelper;
+    // configure energy harvester
+    basicHarvesterHelper.Set("PeriodicHarvestedPowerUpdateInterval", TimeValue(Seconds(harvestingUpdateInterval)));
+    basicHarvesterHelper.Set("HarvestablePower", StringValue("ns3::UniformRandomVariable[Min=0.0|Max=0.1]"));
+    // install harvester on all energy sources
+    EnergyHarvesterContainer harvesters = basicHarvesterHelper.Install(sources);
     /***************************************************************************/
-    // all sources are connected to node 1
+
+
+    /** Connect trace sources **/
+    /***************************************************************************/
+    // all traces are connected to node 1
     // energy source
-/*    Ptr<BasicEnergySource> basicSourcePtr = DynamicCast<BasicEnergySource> (sources.Get (1));
-    basicSourcePtr->TraceConnectWithoutContext ("RemainingEnergy", MakeCallback (&RemainingEnergy));
+    Ptr<BasicEnergySource> basicSourcePtr = DynamicCast<BasicEnergySource>(sources.Get(1));
+    basicSourcePtr->TraceConnectWithoutContext("RemainingEnergy", MakeCallback(&RemainingEnergy));
     // device energy model
     Ptr<DeviceEnergyModel> basicRadioModelPtr =
-    basicSourcePtr->FindDeviceEnergyModels ("ns3::WifiRadioEnergyModel").Get (0);
-    NS_ASSERT (basicRadioModelPtr != NULL);
-    basicRadioModelPtr->TraceConnectWithoutContext ("TotalEnergyConsumption", MakeCallback (&TotalEnergy));
-*/
+        basicSourcePtr->FindDeviceEnergyModels("ns3::WifiRadioEnergyModel").Get(0);
+    NS_ASSERT(basicRadioModelPtr != 0);
+    basicRadioModelPtr->TraceConnectWithoutContext("TotalEnergyConsumption", MakeCallback(&TotalEnergy));
+    // energy harvester
+    Ptr<BasicEnergyHarvester> basicHarvesterPtr = DynamicCast<BasicEnergyHarvester>(harvesters.Get(1));
+    basicHarvesterPtr->TraceConnectWithoutContext("HarvestedPower", MakeCallback(&HarvestedPower));
+    basicHarvesterPtr->TraceConnectWithoutContext("TotalEnergyHarvested", MakeCallback(&TotalEnergyHarvested));
+    /***************************************************************************/
 
     //Setup packets that will be sent during the simulation.
     setup_packets_to_be_sent(nodes, adhocInterfaces, onoff1 );
@@ -271,13 +289,13 @@ int main (int argc, char** argv)
 
     NS_LOG_UNCOND ("Blargh");
 
-    /*for (DeviceEnergyModelContainer::Iterator iter = deviceModels.Begin (); iter != deviceModels.End (); iter ++)
+   for (DeviceEnergyModelContainer::Iterator iter = deviceModels.Begin (); iter != deviceModels.End (); iter ++)
     {
       double energyConsumed = (*iter)->GetTotalEnergyConsumption ();
       NS_LOG_UNCOND ("End of simulation (" << Simulator::Now ().GetSeconds ()
                      << "s) Total energy consumed by radio = " << energyConsumed << "J");
       NS_ASSERT (energyConsumed <= 0.1);
-    }*/
+   }
 
 
     Simulator::Destroy ();
