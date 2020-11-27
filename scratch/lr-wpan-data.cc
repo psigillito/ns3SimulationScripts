@@ -215,6 +215,13 @@ int main (int argc, char** argv)
     // Energy Harvester variables
     double harvestingUpdateInterval = 1;  // seconds
 
+    // Starting Energy Source Value
+    double basicEnergySourceInitialEnergyJ = 1; // Joules
+
+    // Default Wifi Model Energy Costs
+    double transmitCurrent = 0.0174; // Amps
+    double recieveCurrent = 0.0197; // Amps
+
 	// first arg is routing protocol 1 = aodv, 2 = olsr, 3 = dsdv
 	auto routing_protocol = std::stoi(argv[1]);
 	auto nodes_count = std::stoi(argv[2]);
@@ -261,13 +268,15 @@ int main (int argc, char** argv)
     // energy source
     BasicEnergySourceHelper basicSourceHelper;
     // configure energy source
-    basicSourceHelper.Set ("BasicEnergySourceInitialEnergyJ", DoubleValue (0.1));
+    basicSourceHelper.Set ("BasicEnergySourceInitialEnergyJ", basicEnergySourceInitialEnergyJ);
     // install source
     EnergySourceContainer sources = basicSourceHelper.Install (nodes);
     // device energy model
     WifiRadioEnergyModelHelper radioEnergyHelper;
     // configure radio energy model
-    radioEnergyHelper.Set ("TxCurrentA", DoubleValue (0.0174));
+    radioEnergyHelper.Set("TxCurrentA", transmitCurrent);
+    radioEnergyHelper.Set("RxCurrentA", recieveCurrent);
+
     // install device model
     DeviceEnergyModelContainer deviceModels = radioEnergyHelper.Install (adhocDevices, sources);
 
@@ -279,7 +288,6 @@ int main (int argc, char** argv)
     // install harvester on all energy sources
     EnergyHarvesterContainer harvesters = basicHarvesterHelper.Install(sources);
     /***************************************************************************/
-
 
     /** Connect trace sources **/
     /***************************************************************************/
@@ -317,8 +325,6 @@ int main (int argc, char** argv)
       NS_ASSERT (energyConsumed <= 0.1);
    }
 
-
     Simulator::Destroy ();
-
 
 }
