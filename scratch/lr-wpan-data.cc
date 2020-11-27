@@ -268,14 +268,14 @@ int main (int argc, char** argv)
     // energy source
     BasicEnergySourceHelper basicSourceHelper;
     // configure energy source
-    basicSourceHelper.Set ("BasicEnergySourceInitialEnergyJ", basicEnergySourceInitialEnergyJ);
+    basicSourceHelper.Set ("BasicEnergySourceInitialEnergyJ", DoubleValue (basicEnergySourceInitialEnergyJ));
     // install source
     EnergySourceContainer sources = basicSourceHelper.Install (nodes);
     // device energy model
     WifiRadioEnergyModelHelper radioEnergyHelper;
     // configure radio energy model
-    radioEnergyHelper.Set("TxCurrentA", transmitCurrent);
-    radioEnergyHelper.Set("RxCurrentA", recieveCurrent);
+    radioEnergyHelper.Set("TxCurrentA", DoubleValue (transmitCurrent));
+    radioEnergyHelper.Set("RxCurrentA", DoubleValue (recieveCurrent));
 
     // install device model
     DeviceEnergyModelContainer deviceModels = radioEnergyHelper.Install (adhocDevices, sources);
