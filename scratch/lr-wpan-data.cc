@@ -43,17 +43,36 @@ int packetsReceived{0};
 double TotalTime{200.0};
 
 /// Trace function for remaining energy at node.
-static void RemainingEnergy (double oldValue, double remainingEnergy)
+void
+RemainingEnergy(double oldValue, double remainingEnergy)
 {
-  NS_LOG_UNCOND (Simulator::Now ().GetSeconds ()
-                 << "s Current remaining energy = " << remainingEnergy << "J");
+    NS_LOG_UNCOND(Simulator::Now().GetSeconds()
+        << "s Current remaining energy = " << remainingEnergy << "J");
 }
 
 /// Trace function for total energy consumption at node.
-static void TotalEnergy (double oldValue, double totalEnergy)
+void
+TotalEnergy(double oldValue, double totalEnergy)
 {
-  NS_LOG_UNCOND (Simulator::Now ().GetSeconds ()
-                 << "s Total energy consumed by radio = " << totalEnergy << "J");
+    NS_LOG_UNCOND(Simulator::Now().GetSeconds()
+        << "s Total energy consumed by radio = " << totalEnergy << "J");
+}
+
+/// Trace function for the power harvested by the energy harvester.
+void
+HarvestedPower(double oldValue, double harvestedPower)
+{
+    NS_LOG_UNCOND(Simulator::Now().GetSeconds()
+        << "s Current harvested power = " << harvestedPower << " W");
+}
+
+/// Trace function for the total energy harvested by the node.
+void
+TotalEnergyHarvested(double oldValue, double TotalEnergyHarvested)
+{
+    NS_LOG_UNCOND(Simulator::Now().GetSeconds()
+        << "s Total energy harvested by harvester = "
+        << TotalEnergyHarvested << " J");
 }
 
 
