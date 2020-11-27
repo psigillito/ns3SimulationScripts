@@ -207,12 +207,13 @@ MobilityHelper setup_mobility()
 
 int main (int argc, char** argv)
 {
-
     LogComponentEnable ("EnergySource", LOG_LEVEL_DEBUG);
     LogComponentEnable ("BasicEnergySource", LOG_LEVEL_DEBUG);
     LogComponentEnable ("DeviceEnergyModel", LOG_LEVEL_DEBUG);
     LogComponentEnable ("WifiRadioEnergyModel", LOG_LEVEL_DEBUG);
     
+    // Energy Harvester variables
+    double harvestingUpdateInterval = 1;  // seconds
 
 	// first arg is routing protocol 1 = aodv, 2 = olsr, 3 = dsdv
 	auto routing_protocol = std::stoi(argv[1]);
