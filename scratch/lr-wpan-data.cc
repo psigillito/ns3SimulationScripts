@@ -29,46 +29,47 @@
 #include "ns3/v4ping-helper.h"
 #include "ns3/energy-module.h"
 #include "ns3/wifi-radio-energy-model-helper.h"
+#include "ns3/stats-module.h" //GNU Plot Helper
 
 #include <string>
 #include <cmath>
 #include <iostream>
 #include <fstream>
-
+#include <iomanip>
 
 using namespace ns3;
 
-int bytesTotal{0};
+
 int packetsReceived{0};
-double TotalTime{200.0};
+double TotalTime{301.0}; //5 min simulation extra second is to write values on last second
 
 /// Trace function for remaining energy at node.
-void
-RemainingEnergy(double oldValue, double remainingEnergy)
+void RemainingEnergy(double oldValue, double remainingEnergy)
 {
-    NS_LOG_UNCOND(Simulator::Now().GetSeconds()
-        << "s Current remaining energy = " << remainingEnergy << "J");
+	//Only print if there is a change of at least 0.01
+	if( std::fabs(oldValue - remainingEnergy) > 0.01)
+	{
+	   NS_LOG_UNCOND(Simulator::Now().GetSeconds()
+			<< "s Current remaining energy = " << std::setprecision(7) << remainingEnergy << "J");
+	}
 }
 
 /// Trace function for total energy consumption at node.
-void
-TotalEnergy(double oldValue, double totalEnergy)
+void TotalEnergy(double oldValue, double totalEnergy)
 {
     NS_LOG_UNCOND(Simulator::Now().GetSeconds()
         << "s Total energy consumed by radio = " << totalEnergy << "J");
 }
 
 /// Trace function for the power harvested by the energy harvester.
-void
-HarvestedPower(double oldValue, double harvestedPower)
+void HarvestedPower(double oldValue, double harvestedPower)
 {
     NS_LOG_UNCOND(Simulator::Now().GetSeconds()
         << "s Current harvested power = " << harvestedPower << " W");
 }
 
 /// Trace function for the total energy harvested by the node.
-void
-TotalEnergyHarvested(double oldValue, double TotalEnergyHarvested)
+void TotalEnergyHarvested(double oldValue, double TotalEnergyHarvested)
 {
     NS_LOG_UNCOND(Simulator::Now().GetSeconds()
         << "s Total energy harvested by harvester = "
@@ -76,22 +77,18 @@ TotalEnergyHarvested(double oldValue, double TotalEnergyHarvested)
 }
 
 
-static inline std::string
-PrintReceivedPacket (Ptr<Socket> socket, Ptr<Packet> packet, Address senderAddress)
+static inline std::string PrintReceivedPacket (Ptr<Socket> socket, Ptr<Packet> packet, Address senderAddress)
 {
   std::ostringstream oss;
 
   oss << Simulator::Now ().GetSeconds () << " " << socket->GetNode ()->GetId ();
 
   if (InetSocketAddress::IsMatchingType (senderAddress))
-    {
+  {
       InetSocketAddress addr = InetSocketAddress::ConvertFrom (senderAddress);
       oss << " received one packet from " << addr.GetIpv4 ();
-    }
-  else
-    {
-      oss << " received one packet!";
-    }
+  }
+
   return oss.str ();
 }
 
@@ -101,36 +98,34 @@ void ReceivePacket (Ptr<Socket> socket)
   Ptr<Packet> packet;
   Address senderAddress;
   while ((packet = socket->RecvFrom (senderAddress)))
-    {
-      bytesTotal += packet->GetSize ();
+  {
       packetsReceived += 1;
       NS_LOG_UNCOND (PrintReceivedPacket (socket, packet, senderAddress));
-    }
+  }
 }
 
 
-//for each node in the list send to individual packet to each other node.
-//this loop completes before simulation starts so packets are not going to be reported received in any particular order.
+//for each node in the list setup applications to be sending to each other so that traffic continues to be generated throughout simulation
 void setup_packets_to_be_sent(NodeContainer& nodes, Ipv4InterfaceContainer& adhocInterfaces, OnOffHelper& onoff1 )
 {
 	TypeId tid = TypeId::LookupByName ("ns3::UdpSocketFactory");
 
 	for (unsigned int i = 0; i < nodes.GetN(); i++)
 	{
+		Ptr<Socket> sink = Socket::CreateSocket (nodes.Get(i), tid);
+		InetSocketAddress local = InetSocketAddress (adhocInterfaces.GetAddress (i), 9);
+		sink->Bind (local);
+		sink->SetRecvCallback (MakeCallback (ReceivePacket));
+
 		for( unsigned int j = 0; j < nodes.GetN(); ++j)
 		{
-			Ptr<Socket> sink = Socket::CreateSocket (nodes.Get(i), tid);
-			InetSocketAddress local = InetSocketAddress (adhocInterfaces.GetAddress (i), 9/*port number*/);
-			sink->Bind (local);
-			sink->SetRecvCallback (MakeCallback (ReceivePacket));
-
 			AddressValue remoteAddress (InetSocketAddress (adhocInterfaces.GetAddress (i), 9));
 			onoff1.SetAttribute ("Remote", remoteAddress);
 
 			Ptr<UniformRandomVariable> var = CreateObject<UniformRandomVariable> ();
 
 			ApplicationContainer temp = onoff1.Install (nodes.Get(j));
-			temp.Start (Seconds (var->GetValue (100.0,101.0)));
+			temp.Start (Seconds (var->GetValue (0.0,1.0)));
 			temp.Stop (Seconds (TotalTime));
 		}
 	  }
@@ -160,7 +155,6 @@ InternetStackHelper setup_internet_stack( int routing_protocol)
         	break;
         }
 
-    internet.SetRoutingHelper(aodv);
     return internet;
 }
 
@@ -191,41 +185,69 @@ NetDeviceContainer setup_net_devices( NodeContainer& nodes, std::string phyMode)
 MobilityHelper setup_mobility()
 {
     MobilityHelper mobility;
-    mobility.SetMobilityModel ("ns3::ConstantPositionMobilityModel");
+
     mobility.SetPositionAllocator ("ns3::GridPositionAllocator",
                                    "MinX", DoubleValue (0.0),
                                    "MinY", DoubleValue (0.0),
                                    "DeltaX", DoubleValue (80),
                                    "DeltaY", DoubleValue (80),
-                                   "GridWidth", UintegerValue (10),
+                                   "GridWidth", UintegerValue (5), //SETS NUMBER OF NODES IN A ROW
                                    "LayoutType", StringValue ("RowFirst"));
+
     mobility.SetMobilityModel ("ns3::ConstantPositionMobilityModel");
 
-	return mobility;
+    //mobility for randomly moving nodes
+    //mobility.SetMobilityModel ("ns3::RandomWalk2dMobilityModel",
+    //        				   "Speed", StringValue ("ns3::ConstantRandomVariable[Constant=9999.0]"),
+    //                           "Bounds", RectangleValue (Rectangle (0, 500, 0, 500)));
+
+    return mobility;
+}
+
+//Report energy consumption callback.
+//writes out to txt file.
+//this function is self scheduling i.e. it reschedules itself for every two seconds.
+std::ofstream output_file;
+DeviceEnergyModelContainer deviceModels;
+
+void Report_Energy_Consumption()
+{
+	auto time = Simulator::Now().GetSeconds();
+	double energyConsumed = 0;
+
+	for (DeviceEnergyModelContainer::Iterator iter = deviceModels.Begin (); iter != deviceModels.End (); iter++)
+	{
+		energyConsumed += (*iter)->GetTotalEnergyConsumption ();
+	}
+	output_file << time << "	" << packetsReceived << "	" << energyConsumed << "\n";
+
+    Simulator::Schedule (Seconds (2.0), &Report_Energy_Consumption);
 }
 
 
 int main (int argc, char** argv)
 {
-    LogComponentEnable ("EnergySource", LOG_LEVEL_DEBUG);
-    LogComponentEnable ("BasicEnergySource", LOG_LEVEL_DEBUG);
-    LogComponentEnable ("DeviceEnergyModel", LOG_LEVEL_DEBUG);
-    LogComponentEnable ("WifiRadioEnergyModel", LOG_LEVEL_DEBUG);
-    
+    //LogComponentEnable ("EnergySource", LOG_LEVEL_DEBUG);
+    //LogComponentEnable ("BasicEnergySource", LOG_LEVEL_DEBUG);
+    //LogComponentEnable ("DeviceEnergyModel", LOG_LEVEL_DEBUG);
+    //LogComponentEnable ("WifiRadioEnergyModel", LOG_LEVEL_DEBUG);
+
     // Energy Harvester variables
-    double harvestingUpdateInterval = 1;  // seconds
+    //double harvestingUpdateInterval = 1;  // seconds
 
     // Starting Energy Source Value
-    double basicEnergySourceInitialEnergyJ = 1; // Joules
+    double basicEnergySourceInitialEnergyJ = 20000; // pprox. 9 volt battery (19440 J )
 
     // Default Wifi Model Energy Costs
-    double transmitCurrent = 0.0174; // Amps
-    double recieveCurrent = 0.0197; // Amps
+    // double transmitCurrent = 0.0174; // Amps
+    // double recieveCurrent = 0.0197; // Amps
 
 	// first arg is routing protocol 1 = aodv, 2 = olsr, 3 = dsdv
 	auto routing_protocol = std::stoi(argv[1]);
 	auto nodes_count = std::stoi(argv[2]);
 
+	output_file.open ("aodv_25nodes_static_grid.txt");
+    NS_LOG_UNCOND ("START TOTAL ENERGY IN EXPERIMENT: " << (nodes_count * basicEnergySourceInitialEnergyJ));
     NS_LOG_UNCOND ("NODES IN EXPERIMENT " + std::string(argv[2]));
 
 	Packet::EnablePrinting ();
@@ -234,9 +256,9 @@ int main (int argc, char** argv)
     std::string phyMode ("DsssRate11Mbps");
     std::string tr_name ("manet-routing-compare");
 
-    Config::SetDefault  ("ns3::OnOffApplication::PacketSize",StringValue ("64"));
+    Config::SetDefault  ("ns3::OnOffApplication::PacketSize",StringValue ("1000"));
     Config::SetDefault ("ns3::OnOffApplication::DataRate",  StringValue (rate));
-    Config::SetDefault ("ns3::WifiRemoteStationManager::NonUnicastMode",StringValue (phyMode));
+    //Config::SetDefault ("ns3::WifiRemoteStationManager::NonUnicastMode",StringValue (phyMode));
 
     // Create Nodes
     NodeContainer nodes;
@@ -258,73 +280,83 @@ int main (int argc, char** argv)
     Ipv4InterfaceContainer adhocInterfaces;
     adhocInterfaces = addressAdhoc.Assign (adhocDevices);
 
-    // ON/OFF device behaviour
+
+    // ON/OFF device behavior
     OnOffHelper onoff1 ("ns3::UdpSocketFactory",Address ());
     onoff1.SetAttribute ("OnTime", StringValue ("ns3::ConstantRandomVariable[Constant=1.0]"));
     onoff1.SetAttribute ("OffTime", StringValue ("ns3::ConstantRandomVariable[Constant=0.0]"));
 
+
     /************************** Energy Model ************************/
-
-    // energy source
+    // Configure and install energy source
     BasicEnergySourceHelper basicSourceHelper;
-    // configure energy source
     basicSourceHelper.Set ("BasicEnergySourceInitialEnergyJ", DoubleValue (basicEnergySourceInitialEnergyJ));
-    // install source
     EnergySourceContainer sources = basicSourceHelper.Install (nodes);
-    // device energy model
-    WifiRadioEnergyModelHelper radioEnergyHelper;
+
     // configure radio energy model
-    radioEnergyHelper.Set("TxCurrentA", DoubleValue (transmitCurrent));
-    radioEnergyHelper.Set("RxCurrentA", DoubleValue (recieveCurrent));
+    WifiRadioEnergyModelHelper radioEnergyHelper;
 
+    /*   double voltage = 9.0; // volts
+
+    radioEnergyHelper.Set("TxCurrentA", DoubleValue (transmitCurrent)); //transmission current
+    radioEnergyHelper.Set("RxCurrentA", DoubleValue (recieveCurrent)); // receive current
+
+    radioEnergyHelper.SetTxCurrentModel ("ns3::LinearWifiTxCurrentModel",
+                                           "Voltage", DoubleValue (voltage) );
+     */
     // install device model
-    DeviceEnergyModelContainer deviceModels = radioEnergyHelper.Install (adhocDevices, sources);
+    deviceModels = radioEnergyHelper.Install (adhocDevices, sources);
 
-    /* energy harvester */
-    BasicEnergyHarvesterHelper basicHarvesterHelper;
+    //Energy Harvester adds power to the device
+    //BasicEnergyHarvesterHelper basicHarvesterHelper;
     // configure energy harvester
-    basicHarvesterHelper.Set("PeriodicHarvestedPowerUpdateInterval", TimeValue(Seconds(harvestingUpdateInterval)));
-    basicHarvesterHelper.Set("HarvestablePower", StringValue("ns3::UniformRandomVariable[Min=0.0|Max=0.1]"));
+    //basicHarvesterHelper.Set("PeriodicHarvestedPowerUpdateInterval", TimeValue(Seconds(harvestingUpdateInterval)));
+    //basicHarvesterHelper.Set("HarvestablePower", StringValue("ns3::UniformRandomVariable[Min=0.0|Max=0.1]"));
     // install harvester on all energy sources
-    EnergyHarvesterContainer harvesters = basicHarvesterHelper.Install(sources);
-    /***************************************************************************/
+    //EnergyHarvesterContainer harvesters = basicHarvesterHelper.Install(sources);
 
-    /** Connect trace sources **/
-    /***************************************************************************/
-    // all traces are connected to node 1
-    // energy source
-    Ptr<BasicEnergySource> basicSourcePtr = DynamicCast<BasicEnergySource>(sources.Get(1));
-    basicSourcePtr->TraceConnectWithoutContext("RemainingEnergy", MakeCallback(&RemainingEnergy));
-    // device energy model
-    Ptr<DeviceEnergyModel> basicRadioModelPtr =
-        basicSourcePtr->FindDeviceEnergyModels("ns3::WifiRadioEnergyModel").Get(0);
-    NS_ASSERT(basicRadioModelPtr != 0);
-    basicRadioModelPtr->TraceConnectWithoutContext("TotalEnergyConsumption", MakeCallback(&TotalEnergy));
-    // energy harvester
-    Ptr<BasicEnergyHarvester> basicHarvesterPtr = DynamicCast<BasicEnergyHarvester>(harvesters.Get(1));
-    basicHarvesterPtr->TraceConnectWithoutContext("HarvestedPower", MakeCallback(&HarvestedPower));
-    basicHarvesterPtr->TraceConnectWithoutContext("TotalEnergyHarvested", MakeCallback(&TotalEnergyHarvested));
-    /***************************************************************************/
+    // Connect trace sources
+    for (unsigned int i = 0; i < sources.GetN(); i++)
+   	{
+    	 Ptr<BasicEnergySource> basicSourcePtr = DynamicCast<BasicEnergySource>(sources.Get(i));
+    	 basicSourcePtr->TraceConnectWithoutContext("RemainingEnergy", MakeCallback(&RemainingEnergy) );
+
+    	 // device energy model
+    	 //Ptr<DeviceEnergyModel> basicRadioModelPtr =
+    	 //	  basicSourcePtr->FindDeviceEnergyModels("ns3::WifiRadioEnergyModel").Get(i);
+
+    	 //NS_ASSERT(basicRadioModelPtr);
+    	 //basicRadioModelPtr->TraceConnectWithoutContext("TotalEnergyConsumption", MakeCallback(&TotalEnergy));
+
+   	     // energy harvester
+    	 //Ptr<BasicEnergyHarvester> basicHarvesterPtr = DynamicCast<BasicEnergyHarvester>(harvesters.Get(1));
+    	 //basicHarvesterPtr->TraceConnectWithoutContext("HarvestedPower", MakeCallback(&HarvestedPower));
+    	 //basicHarvesterPtr->TraceConnectWithoutContext("TotalEnergyHarvested", MakeCallback(&TotalEnergyHarvested));
+   	}
 
     //Setup packets that will be sent during the simulation.
     setup_packets_to_be_sent(nodes, adhocInterfaces, onoff1 );
 
     //creating animation interface will create xml runnable by netanim
-    AnimationInterface anim ("PHIL_TEST.xml");
+    AnimationInterface anim ("manet_simulation.xml");
+
+    Simulator::Schedule (Seconds (2.0), &Report_Energy_Consumption);
 
     Simulator::Stop (Seconds (TotalTime));
     Simulator::Run ();
 
-    NS_LOG_UNCOND ("Blargh");
+    double total_consumed = 0;
+    for (DeviceEnergyModelContainer::Iterator iter = deviceModels.Begin (); iter != deviceModels.End (); iter ++)
+        {
+          double energyConsumed = (*iter)->GetTotalEnergyConsumption ();
+          total_consumed += energyConsumed;
+          NS_LOG_UNCOND ("End of simulation (" << Simulator::Now ().GetSeconds ()
+                         << "s) Total energy consumed by radio = " << energyConsumed << "J");
+        }
+    NS_LOG_UNCOND("TOTAL CONSUMED = " << std::setprecision(7) << total_consumed << " J");
 
-   for (DeviceEnergyModelContainer::Iterator iter = deviceModels.Begin (); iter != deviceModels.End (); iter ++)
-    {
-      double energyConsumed = (*iter)->GetTotalEnergyConsumption ();
-      NS_LOG_UNCOND ("End of simulation (" << Simulator::Now ().GetSeconds ()
-                     << "s) Total energy consumed by radio = " << energyConsumed << "J");
-      NS_ASSERT (energyConsumed <= 0.1);
-   }
+    NS_LOG_UNCOND("Packets Received = " << packetsReceived);
 
     Simulator::Destroy ();
-
+    output_file.close();
 }
