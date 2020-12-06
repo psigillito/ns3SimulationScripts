@@ -133,7 +133,6 @@ void setup_packets_to_be_sent(NodeContainer& nodes, Ipv4InterfaceContainer& adho
 
 InternetStackHelper setup_internet_stack( int routing_protocol)
 {
-
 	InternetStackHelper internet;
 	OlsrHelper olsr;
     AodvHelper aodv;
@@ -310,8 +309,10 @@ int main (int argc, char** argv)
     //Energy Harvester adds power to the device
     //BasicEnergyHarvesterHelper basicHarvesterHelper;
     // configure energy harvester
+
     //basicHarvesterHelper.Set("PeriodicHarvestedPowerUpdateInterval", TimeValue(Seconds(harvestingUpdateInterval)));
     //basicHarvesterHelper.Set("HarvestablePower", StringValue("ns3::UniformRandomVariable[Min=0.0|Max=0.1]"));
+
     // install harvester on all energy sources
     //EnergyHarvesterContainer harvesters = basicHarvesterHelper.Install(sources);
 
@@ -322,16 +323,15 @@ int main (int argc, char** argv)
     	 basicSourcePtr->TraceConnectWithoutContext("RemainingEnergy", MakeCallback(&RemainingEnergy) );
 
     	 // device energy model
-    	 //Ptr<DeviceEnergyModel> basicRadioModelPtr =
-    	 //	  basicSourcePtr->FindDeviceEnergyModels("ns3::WifiRadioEnergyModel").Get(i);
+    	 Ptr<DeviceEnergyModel> basicRadioModelPtr = basicSourcePtr->FindDeviceEnergyModels("ns3::WifiRadioEnergyModel").Get(i);
 
-    	 //NS_ASSERT(basicRadioModelPtr);
-    	 //basicRadioModelPtr->TraceConnectWithoutContext("TotalEnergyConsumption", MakeCallback(&TotalEnergy));
+    	 NS_ASSERT(basicRadioModelPtr);
+    	 basicRadioModelPtr->TraceConnectWithoutContext("TotalEnergyConsumption", MakeCallback(&TotalEnergy));
 
    	     // energy harvester
-    	 //Ptr<BasicEnergyHarvester> basicHarvesterPtr = DynamicCast<BasicEnergyHarvester>(harvesters.Get(1));
-    	 //basicHarvesterPtr->TraceConnectWithoutContext("HarvestedPower", MakeCallback(&HarvestedPower));
-    	 //basicHarvesterPtr->TraceConnectWithoutContext("TotalEnergyHarvested", MakeCallback(&TotalEnergyHarvested));
+    	 Ptr<BasicEnergyHarvester> basicHarvesterPtr = DynamicCast<BasicEnergyHarvester>(harvesters.Get(1));
+    	 basicHarvesterPtr->TraceConnectWithoutContext("HarvestedPower", MakeCallback(&HarvestedPower));
+    	 basicHarvesterPtr->TraceConnectWithoutContext("TotalEnergyHarvested", MakeCallback(&TotalEnergyHarvested));
    	}
 
     //Setup packets that will be sent during the simulation.
@@ -353,6 +353,7 @@ int main (int argc, char** argv)
           NS_LOG_UNCOND ("End of simulation (" << Simulator::Now ().GetSeconds ()
                          << "s) Total energy consumed by radio = " << energyConsumed << "J");
         }
+
     NS_LOG_UNCOND("TOTAL CONSUMED = " << std::setprecision(7) << total_consumed << " J");
 
     NS_LOG_UNCOND("Packets Received = " << packetsReceived);
