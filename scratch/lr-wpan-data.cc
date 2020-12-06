@@ -279,12 +279,10 @@ int main (int argc, char** argv)
     Ipv4InterfaceContainer adhocInterfaces;
     adhocInterfaces = addressAdhoc.Assign (adhocDevices);
 
-
     // ON/OFF device behavior
     OnOffHelper onoff1 ("ns3::UdpSocketFactory",Address ());
     onoff1.SetAttribute ("OnTime", StringValue ("ns3::ConstantRandomVariable[Constant=1.0]"));
     onoff1.SetAttribute ("OffTime", StringValue ("ns3::ConstantRandomVariable[Constant=0.0]"));
-
 
     /************************** Energy Model ************************/
     // Configure and install energy source
@@ -294,27 +292,27 @@ int main (int argc, char** argv)
 
     // configure radio energy model
     WifiRadioEnergyModelHelper radioEnergyHelper;
-
-    /*   double voltage = 9.0; // volts
+    
+    double voltage = 9.0; // volts
 
     radioEnergyHelper.Set("TxCurrentA", DoubleValue (transmitCurrent)); //transmission current
     radioEnergyHelper.Set("RxCurrentA", DoubleValue (recieveCurrent)); // receive current
 
     radioEnergyHelper.SetTxCurrentModel ("ns3::LinearWifiTxCurrentModel",
                                            "Voltage", DoubleValue (voltage) );
-     */
+     
     // install device model
     deviceModels = radioEnergyHelper.Install (adhocDevices, sources);
 
     //Energy Harvester adds power to the device
-    //BasicEnergyHarvesterHelper basicHarvesterHelper;
-    // configure energy harvester
+    BasicEnergyHarvesterHelper basicHarvesterHelper;
 
-    //basicHarvesterHelper.Set("PeriodicHarvestedPowerUpdateInterval", TimeValue(Seconds(harvestingUpdateInterval)));
-    //basicHarvesterHelper.Set("HarvestablePower", StringValue("ns3::UniformRandomVariable[Min=0.0|Max=0.1]"));
+    // configure energy harvester
+    basicHarvesterHelper.Set("PeriodicHarvestedPowerUpdateInterval", TimeValue(Seconds(harvestingUpdateInterval)));
+    basicHarvesterHelper.Set("HarvestablePower", StringValue("ns3::UniformRandomVariable[Min=0.0|Max=0.1]"));
 
     // install harvester on all energy sources
-    //EnergyHarvesterContainer harvesters = basicHarvesterHelper.Install(sources);
+    EnergyHarvesterContainer harvesters = basicHarvesterHelper.Install(sources);
 
     // Connect trace sources
     for (unsigned int i = 0; i < sources.GetN(); i++)
