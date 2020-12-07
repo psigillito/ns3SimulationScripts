@@ -244,8 +244,8 @@ int main (int argc, char** argv)
     double basicEnergySourceInitialEnergyJ = 20000; // pprox. 9 volt battery (19440 J )
 
     // Default Wifi Model Energy Costs
-    //double transmitCurrent = 0.0174; // Amps
-    //double recieveCurrent = 0.0197; // Amps
+    double transmitCurrent = 0.0174; // Amps
+    double recieveCurrent = 0.0197; // Amps
 
 	// first arg is routing protocol 1 = aodv, 2 = olsr, 3 = dsdv
 	auto routing_protocol = std::stoi(argv[1]);
