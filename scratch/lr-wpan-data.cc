@@ -232,20 +232,20 @@ void Report_Energy_Consumption()
 
 int main (int argc, char** argv)
 {
-    LogComponentEnable ("EnergySource", LOG_LEVEL_DEBUG);
-    LogComponentEnable ("BasicEnergySource", LOG_LEVEL_DEBUG);
-    LogComponentEnable ("DeviceEnergyModel", LOG_LEVEL_DEBUG);
-    LogComponentEnable ("WifiRadioEnergyModel", LOG_LEVEL_DEBUG);
+    //LogComponentEnable ("EnergySource", LOG_LEVEL_DEBUG);
+    //LogComponentEnable ("BasicEnergySource", LOG_LEVEL_DEBUG);
+    //LogComponentEnable ("DeviceEnergyModel", LOG_LEVEL_DEBUG);
+    //LogComponentEnable ("WifiRadioEnergyModel", LOG_LEVEL_DEBUG);
 
     // Energy Harvester variables
-   double harvestingUpdateInterval = 1;  // seconds
+   //double harvestingUpdateInterval = 1;  // seconds
 
     // Starting Energy Source Value
     double basicEnergySourceInitialEnergyJ = 20000; // pprox. 9 volt battery (19440 J )
 
     // Default Wifi Model Energy Costs
-    double transmitCurrent = 0.0174; // Amps
-    double recieveCurrent = 0.0197; // Amps
+    //double transmitCurrent = 0.0174; // Amps
+    //double recieveCurrent = 0.0197; // Amps
 
 	// first arg is routing protocol 1 = aodv, 2 = olsr, 3 = dsdv
 	auto routing_protocol = std::stoi(argv[1]);
@@ -301,7 +301,7 @@ int main (int argc, char** argv)
     
     double voltage = 9.0; // volts
 
-    radioEnergyHelper.Set("TxCurrentA", DoubleValue (transmitCurrent)); //transmission current
+    radioEnergyHelper.Set("TxCurrentA", DoubleValue (transmitCurrent)); // transmission current
     radioEnergyHelper.Set("RxCurrentA", DoubleValue (recieveCurrent)); // receive current
 
     radioEnergyHelper.SetTxCurrentModel ("ns3::LinearWifiTxCurrentModel",
@@ -311,14 +311,14 @@ int main (int argc, char** argv)
     deviceModels = radioEnergyHelper.Install (adhocDevices, sources);
 
     //Energy Harvester adds power to the device
-    BasicEnergyHarvesterHelper basicHarvesterHelper;
+    //BasicEnergyHarvesterHelper basicHarvesterHelper;
 
     // configure energy harvester
-    basicHarvesterHelper.Set("PeriodicHarvestedPowerUpdateInterval", TimeValue(Seconds(harvestingUpdateInterval)));
-    basicHarvesterHelper.Set("HarvestablePower", StringValue("ns3::UniformRandomVariable[Min=0.0|Max=0.1]"));
+    //basicHarvesterHelper.Set("PeriodicHarvestedPowerUpdateInterval", TimeValue(Seconds(harvestingUpdateInterval)));
+    //basicHarvesterHelper.Set("HarvestablePower", StringValue("ns3::UniformRandomVariable[Min=0.0|Max=0.1]"));
 
     // install harvester on all energy sources
-    EnergyHarvesterContainer harvesters = basicHarvesterHelper.Install(sources);
+    //EnergyHarvesterContainer harvesters = basicHarvesterHelper.Install(sources);
 
     // Connect trace sources
     for (unsigned int i = 0; i < sources.GetN(); i++)
@@ -333,9 +333,9 @@ int main (int argc, char** argv)
     	 basicRadioModelPtr->TraceConnectWithoutContext("TotalEnergyConsumption", MakeCallback(&TotalEnergy));
 
    	     // energy harvester
-    	 Ptr<BasicEnergyHarvester> basicHarvesterPtr = DynamicCast<BasicEnergyHarvester>(harvesters.Get(1));
-    	 basicHarvesterPtr->TraceConnectWithoutContext("HarvestedPower", MakeCallback(&HarvestedPower));
-    	 basicHarvesterPtr->TraceConnectWithoutContext("TotalEnergyHarvested", MakeCallback(&TotalEnergyHarvested));
+    	// Ptr<BasicEnergyHarvester> basicHarvesterPtr = DynamicCast<BasicEnergyHarvester>(harvesters.Get(1));
+    	// basicHarvesterPtr->TraceConnectWithoutContext("HarvestedPower", MakeCallback(&HarvestedPower));
+    	// basicHarvesterPtr->TraceConnectWithoutContext("TotalEnergyHarvested", MakeCallback(&TotalEnergyHarvested));
    	}
 
     //Setup packets that will be sent during the simulation.
