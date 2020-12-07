@@ -160,7 +160,7 @@ InternetStackHelper setup_internet_stack( int routing_protocol, NodeContainer& n
         	break;
         case 4:
             NS_LOG_UNCOND("DSR ROUTING ENABLED");
-            internet.Install(nodes)
+            internet.Install(nodes);
             dsrMain.Install(dsr, nodes);
             break;
         }
