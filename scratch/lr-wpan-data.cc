@@ -277,7 +277,7 @@ int main (int argc, char** argv)
     mobility.Install (nodes);
 
     // Set Routing and Network Layer
-    InternetStackHelper internet = setup_internet_stack(routing_protocol);
+    InternetStackHelper internet = setup_internet_stack(routing_protocol, nodes);
     internet.Install (nodes);
 
     Ipv4AddressHelper addressAdhoc;
