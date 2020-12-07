@@ -38,6 +38,7 @@
 #include <iomanip>
 
 using namespace ns3;
+using namespace dsr;
 
 
 int packetsReceived{0};
@@ -247,7 +248,7 @@ int main (int argc, char** argv)
     double transmitCurrent = 0.0174; // Amps
     double recieveCurrent = 0.0197; // Amps
 
-	// first arg is routing protocol 1 = aodv, 2 = olsr, 3 = dsdv
+	// first arg is routing protocol 1 = aodv, 2 = olsr, 3 = dsdv, dsr=4
 	auto routing_protocol = std::stoi(argv[1]);
 	auto nodes_count = std::stoi(argv[2]);
 
