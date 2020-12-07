@@ -131,12 +131,14 @@ void setup_packets_to_be_sent(NodeContainer& nodes, Ipv4InterfaceContainer& adho
 	  }
 }
 
-InternetStackHelper setup_internet_stack( int routing_protocol)
+InternetStackHelper setup_internet_stack( int routing_protocol, NodeContainer& adhocNodes )
 {
 	InternetStackHelper internet;
 	OlsrHelper olsr;
     AodvHelper aodv;
     DsdvHelper dsdv;
+    DsrHelper dsr;
+    DsrMainHelper dsrMain;
 
     switch( routing_protocol)
         {
@@ -152,6 +154,10 @@ InternetStackHelper setup_internet_stack( int routing_protocol)
             NS_LOG_UNCOND ("DSDV ROUTING ENABLED");
             internet.SetRoutingHelper(dsdv);
         	break;
+        case 4:
+            NS_LOG_UNCOND("DSR ROUTING ENABLED");
+            dsrMain.Install(dsr, adhocNodes);
+            break;
         }
 
     return internet;
@@ -226,20 +232,20 @@ void Report_Energy_Consumption()
 
 int main (int argc, char** argv)
 {
-    //LogComponentEnable ("EnergySource", LOG_LEVEL_DEBUG);
-    //LogComponentEnable ("BasicEnergySource", LOG_LEVEL_DEBUG);
-    //LogComponentEnable ("DeviceEnergyModel", LOG_LEVEL_DEBUG);
-    //LogComponentEnable ("WifiRadioEnergyModel", LOG_LEVEL_DEBUG);
+    LogComponentEnable ("EnergySource", LOG_LEVEL_DEBUG);
+    LogComponentEnable ("BasicEnergySource", LOG_LEVEL_DEBUG);
+    LogComponentEnable ("DeviceEnergyModel", LOG_LEVEL_DEBUG);
+    LogComponentEnable ("WifiRadioEnergyModel", LOG_LEVEL_DEBUG);
 
     // Energy Harvester variables
-    //double harvestingUpdateInterval = 1;  // seconds
+   double harvestingUpdateInterval = 1;  // seconds
 
     // Starting Energy Source Value
     double basicEnergySourceInitialEnergyJ = 20000; // pprox. 9 volt battery (19440 J )
 
     // Default Wifi Model Energy Costs
-    // double transmitCurrent = 0.0174; // Amps
-    // double recieveCurrent = 0.0197; // Amps
+    double transmitCurrent = 0.0174; // Amps
+    double recieveCurrent = 0.0197; // Amps
 
 	// first arg is routing protocol 1 = aodv, 2 = olsr, 3 = dsdv
 	auto routing_protocol = std::stoi(argv[1]);
@@ -300,7 +306,7 @@ int main (int argc, char** argv)
 
     radioEnergyHelper.SetTxCurrentModel ("ns3::LinearWifiTxCurrentModel",
                                            "Voltage", DoubleValue (voltage) );
-     
+
     // install device model
     deviceModels = radioEnergyHelper.Install (adhocDevices, sources);
 
