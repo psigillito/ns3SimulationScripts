@@ -146,17 +146,21 @@ InternetStackHelper setup_internet_stack( int routing_protocol, NodeContainer& a
         case 1:
             NS_LOG_UNCOND ("AODV ROUTING ENABLED");
             internet.SetRoutingHelper(aodv);
+            internet.Install(nodes);
         	break;
         case 2:
             NS_LOG_UNCOND ("OLSR ROUTING ENABLED");
             internet.SetRoutingHelper(olsr);
+            internet.Install(nodes);
         	break;
         case 3:
             NS_LOG_UNCOND ("DSDV ROUTING ENABLED");
             internet.SetRoutingHelper(dsdv);
+            internet.Install(nodes);
         	break;
         case 4:
             NS_LOG_UNCOND("DSR ROUTING ENABLED");
+            internet.Install(nodes);
             dsrMain.Install(dsr, adhocNodes);
             break;
         }
@@ -279,7 +283,7 @@ int main (int argc, char** argv)
 
     // Set Routing and Network Layer
     InternetStackHelper internet = setup_internet_stack(routing_protocol, nodes);
-    internet.Install (nodes);
+
 
     Ipv4AddressHelper addressAdhoc;
     addressAdhoc.SetBase ("10.1.1.0", "255.255.255.0");
