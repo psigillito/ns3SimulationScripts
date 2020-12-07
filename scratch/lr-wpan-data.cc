@@ -132,7 +132,7 @@ void setup_packets_to_be_sent(NodeContainer& nodes, Ipv4InterfaceContainer& adho
 	  }
 }
 
-InternetStackHelper setup_internet_stack( int routing_protocol, NodeContainer& adhocNodes )
+InternetStackHelper setup_internet_stack( int routing_protocol, NodeContainer& nodes)
 {
 	InternetStackHelper internet;
 	OlsrHelper olsr;
@@ -160,8 +160,8 @@ InternetStackHelper setup_internet_stack( int routing_protocol, NodeContainer& a
         	break;
         case 4:
             NS_LOG_UNCOND("DSR ROUTING ENABLED");
-            internet.Install(nodes);
-            dsrMain.Install(dsr, adhocNodes);
+            internet.Install(nodes)
+            dsrMain.Install(dsr, nodes);
             break;
         }
 
@@ -283,7 +283,6 @@ int main (int argc, char** argv)
 
     // Set Routing and Network Layer
     InternetStackHelper internet = setup_internet_stack(routing_protocol, nodes);
-
 
     Ipv4AddressHelper addressAdhoc;
     addressAdhoc.SetBase ("10.1.1.0", "255.255.255.0");
