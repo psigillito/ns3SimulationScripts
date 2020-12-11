@@ -232,7 +232,7 @@ MobilityHelper setup_mobility(int mobility_model)
     */
     case 2:
         mobility.SetMobilityModel("ns3::RandomWaypointMobilityModel",
-            "Position", &mobility.GetPositionAllocator, // Position Allocator defines bounds on model
+            "Position", mobility->GetPosition(), // Position Allocator defines bounds on model
             "Speed", StringValue("ns3::ConstantRandomVariable[Constant=1.0]"), // Random speed picked at each interval
             "Pause", StringValue("ns3::ConstantRandomVariable[Constant=1.0]")); // Random pause time
         break;
@@ -301,7 +301,7 @@ int main (int argc, char** argv)
 	auto nodes_count = std::stoi(argv[2]);
 
     // third arg is mobility model, default no mobility, 1: Random2Walk
-    auto mobility_model = std::stoi(arg[3])
+    auto mobility_model = std::stoi(argv[3]);
 
 	output_file.open ("aodv_25nodes_static_grid.txt");
     NS_LOG_UNCOND ("START TOTAL ENERGY IN EXPERIMENT: " << (nodes_count * basicEnergySourceInitialEnergyJ));
