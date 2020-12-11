@@ -217,7 +217,7 @@ MobilityHelper setup_mobility(int mobility_model)
     * model.
     */
     case 1:
-        NS_LOG_UNCOND("USING RANDOM WALK 2D MOBILITY MODEL"));
+        NS_LOG_UNCOND("USING RANDOM WALK 2D MOBILITY MODEL");
         mobility.SetMobilityModel("ns3::RandomWalk2dMobilityModel",
             "Mode", StringValue("Time"), // Time mode
             "Time", StringValue("2s"), // Time until direction change
@@ -232,7 +232,7 @@ MobilityHelper setup_mobility(int mobility_model)
     * the process starts over(by pausing).
     */
     case 2:
-        NS_LOG_UNCOND("USING RANDOM WAYPOINT MOBILITY MODEL"));
+        NS_LOG_UNCOND("USING RANDOM WAYPOINT MOBILITY MODEL");
         mobility.SetMobilityModel("ns3::RandomWaypointMobilityModel",
             // "Position", mobility.GetPosition(), // Position Allocator defines bounds on model
             "Speed", StringValue("ns3::ConstantRandomVariable[Constant=1.0]"), // Random speed picked at each interval
@@ -246,7 +246,7 @@ MobilityHelper setup_mobility(int mobility_model)
     * selects a new direction and speed, aso.
     */
     case 3:
-        NS_LOG_UNCOND("USING RANDOM DIRECTION 2D MOBILITY MODEL"));
+        NS_LOG_UNCOND("USING RANDOM DIRECTION 2D MOBILITY MODEL");
         mobility.SetMobilityModel("ns3::RandomDirection2dMobilityModel",
             "Direction", StringValue("ns3::ConstantRandomVariable[Constant=1.0]"), // random direction after wall hit
             "Speed", StringValue("ns3::ConstantRandomVariable[Constant=1.0]"), // random speed to use after wall hit
@@ -255,7 +255,7 @@ MobilityHelper setup_mobility(int mobility_model)
          
     // Default is a static node mode;
     default:
-        NS_LOG_UNCOND("USING CONSTANT POSITION MODEL"));
+        NS_LOG_UNCOND("USING CONSTANT POSITION MODEL");
         mobility.SetMobilityModel("ns3::ConstantPositionMobilityModel");
     }
 
