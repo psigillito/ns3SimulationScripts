@@ -160,7 +160,7 @@ InternetStackHelper setup_internet_stack( int routing_protocol, NodeContainer& n
         	break;
         case 4:
             NS_LOG_UNCOND("DSR ROUTING ENABLED");
-            internet.Install(nodes)
+            internet.Install(nodes);
             dsrMain.Install(dsr, nodes);
             break;
         }
@@ -207,9 +207,9 @@ MobilityHelper setup_mobility()
     mobility.SetMobilityModel ("ns3::ConstantPositionMobilityModel");
 
     //mobility for randomly moving nodes
-    //mobility.SetMobilityModel ("ns3::RandomWalk2dMobilityModel",
-    //        				   "Speed", StringValue ("ns3::ConstantRandomVariable[Constant=9999.0]"),
-    //                           "Bounds", RectangleValue (Rectangle (0, 500, 0, 500)));
+    mobility.SetMobilityModel ("ns3::RandomWalk2dMobilityModel",
+            				   "Speed", StringValue ("ns3::ConstantRandomVariable[Constant=9999.0]"),
+                               "Bounds", RectangleValue (Rectangle (0, 500, 0, 500)));
 
     return mobility;
 }
