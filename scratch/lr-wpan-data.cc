@@ -192,7 +192,7 @@ NetDeviceContainer setup_net_devices( NodeContainer& nodes, std::string phyMode)
     return wifi.Install (wifiPhy, wifiMac, nodes);
 }
 
-MobilityHelper setup_mobility(int mobility_model)
+MobilityHelper setup_mobility(int mobility_model=0)
 {
     MobilityHelper mobility;
 
@@ -304,7 +304,7 @@ int main (int argc, char** argv)
 	auto routing_protocol = std::stoi(argv[1]);
 	auto nodes_count = std::stoi(argv[2]);
 
-    // third arg is mobility model, default no mobility, 1: Random2Walk
+    // third arg is mobility model, default no mobility, 1: Random2Walk, 2: RandomWaypoint, 3: Random Direction 
     auto mobility_model = std::stoi(argv[3]);
 
 	output_file.open ("aodv_25nodes_static_grid.txt");
