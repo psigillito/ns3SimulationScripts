@@ -192,24 +192,68 @@ NetDeviceContainer setup_net_devices( NodeContainer& nodes, std::string phyMode)
     return wifi.Install (wifiPhy, wifiMac, nodes);
 }
 
-MobilityHelper setup_mobility()
+MobilityHelper setup_mobility(int mobility_model)
 {
     MobilityHelper mobility;
 
-    mobility.SetPositionAllocator ("ns3::GridPositionAllocator",
-                                   "MinX", DoubleValue (0.0),
-                                   "MinY", DoubleValue (0.0),
-                                   "DeltaX", DoubleValue (80),
-                                   "DeltaY", DoubleValue (80),
-                                   "GridWidth", UintegerValue (5), //SETS NUMBER OF NODES IN A ROW
-                                   "LayoutType", StringValue ("RowFirst"));
+    // Default Static Position Allocator
+    mobility.SetPositionAllocator("ns3::GridPositionAllocator",
+        "MinX", DoubleValue(0.0),
+        "MinY", DoubleValue(0.0),
+        "DeltaX", DoubleValue(80),
+        "DeltaY", DoubleValue(80),
+        "GridWidth", UintegerValue(5), //SETS NUMBER OF NODES IN A ROW
+        "LayoutType", StringValue("RowFirst"));
 
-    mobility.SetMobilityModel ("ns3::ConstantPositionMobilityModel");
-
-    //mobility for randomly moving nodes
-    mobility.SetMobilityModel ("ns3::RandomWalk2dMobilityModel",
-            				   "Speed", StringValue ("ns3::ConstantRandomVariable[Constant=9999.0]"),
-                               "Bounds", RectangleValue (Rectangle (0, 500, 0, 500)));
+    // Setting Mobility Model
+    switch (mobility_model)
+    {
+    /**Each instance moves with a speed and direction chosen at random
+    * with the user - provided random variables until
+    * either a fixed distance has been walked or until a fixed amount
+    * of time.If we hit one of the boundaries(specified by a rectangle),
+    * of the model, we rebound on the boundary with a reflexive angle
+    *and speed.This model is often identified as a brownian motion
+    * model.
+    */
+    case 1:
+        mobility.SetMobilityModel("ns3::RandomWalk2dMobilityModel",
+            "Mode", StringValue("Time"), // Time mode
+            "Time", StringValue("2s"), // Time until direction change
+            "Speed", StringValue("ns3::ConstantRandomVariable[Constant=1.0]"), // random speed picked at each interval
+            "Bounds", StringValue("0|200|0|200")); // walkable bounds
+        break;
+    /**Each object starts by pausing at time zero for the duration governed
+    * by the random variable "Pause".After pausing, the object will pick
+    * a new waypoint(via the PositionAllocator) and a new random speed
+    * via the random variable "Speed", and will begin moving towards the
+    * waypoint at a constant speed.When it reaches the destination,
+    * the process starts over(by pausing).
+    */
+    case 2:
+        mobility.SetMobilityModel("ns3::RandomWaypointMobilityModel",
+            "Position", &mobility.GetPositionAllocator, // Position Allocator defines bounds on model
+            "Speed", StringValue("ns3::ConstantRandomVariable[Constant=1.0]"), // Random speed picked at each interval
+            "Pause", StringValue("ns3::ConstantRandomVariable[Constant=1.0]")); // Random pause time
+        break;
+    /**
+    * The movement of objects is based on random directions: each object
+    * pauses for a specific delay, chooses a random direction and speed and
+    * then travels in the specific direction until it reaches one of
+    * the boundaries of the model. When it reaches the boundary, it pauses,
+    * selects a new direction and speed, aso.
+    */
+    case 3:
+        mobility.SetMobilityModel("ns3::RandomDirection2dMobilityModel",
+            "Direction", StringValue("ns3::ConstantRandomVariable[Constant=1.0]"), // random direction after wall hit
+            "Speed", StringValue("ns3::ConstantRandomVariable[Constant=1.0]"), // random speed to use after wall hit
+            "Pause", StringValue("ns3::ConstantRandomVariable[Constant=1.0]"), // random duration to pause at wall time
+            "Bounds", StringValue("0|200|0|200")); // walkable bounds
+         
+    // Default is a static node mode;
+    default: 
+        mobility.SetMobilityModel("ns3::ConstantPositionMobilityModel");
+    }
 
     return mobility;
 }
@@ -256,6 +300,9 @@ int main (int argc, char** argv)
 	auto routing_protocol = std::stoi(argv[1]);
 	auto nodes_count = std::stoi(argv[2]);
 
+    // third arg is mobility model, default no mobility, 1: Random2Walk
+    auto mobility_model = std::stoi(arg[3])
+
 	output_file.open ("aodv_25nodes_static_grid.txt");
     NS_LOG_UNCOND ("START TOTAL ENERGY IN EXPERIMENT: " << (nodes_count * basicEnergySourceInitialEnergyJ));
     NS_LOG_UNCOND ("NODES IN EXPERIMENT " + std::string(argv[2]));
@@ -278,7 +325,7 @@ int main (int argc, char** argv)
     NetDeviceContainer adhocDevices = setup_net_devices(nodes, phyMode);
 
     // Set Mobility
-    MobilityHelper mobility = setup_mobility();
+    MobilityHelper mobility = setup_mobility(mobility_model);
     mobility.Install (nodes);
 
     // Set Routing and Network Layer
