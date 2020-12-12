@@ -198,11 +198,11 @@ MobilityHelper setup_mobility(int mobility_model=0)
 
     // Default Static Position Allocator
     mobility.SetPositionAllocator("ns3::GridPositionAllocator",
-        "MinX", DoubleValue(0.0),
-        "MinY", DoubleValue(0.0),
-        "DeltaX", DoubleValue(80),
-        "DeltaY", DoubleValue(80),
-        "GridWidth", UintegerValue(5), //SETS NUMBER OF NODES IN A ROW
+        "MinX", DoubleValue(1.0),
+        "MinY", DoubleValue(1.0),
+        "DeltaX", DoubleValue(5.0),
+        "DeltaY", DoubleValue(5.0),
+        "GridWidth", UintegerValue(3), //SETS NUMBER OF NODES IN A ROW
         "LayoutType", StringValue("RowFirst"));
 
     // Setting Mobility Model
@@ -223,7 +223,7 @@ MobilityHelper setup_mobility(int mobility_model=0)
             "Time", StringValue("2s"), // Time until direction change
             "Speed", StringValue("ns3::ConstantRandomVariable[Constant=1.0]"), // random speed picked at each interval
             //"Bounds", StringValue("100|100|100|100")); // walkable bounds
-            "Bounds", RectangleValue(Rectangle(0.0, 100.0, 0.0, 100.0))); // walkable bounds
+            "Bounds", RectangleValue(Rectangle(0.0, 20.0, 0.0, 20.0))); // walkable bounds
         break;
     /**Each object starts by pausing at time zero for the duration governed
     * by the random variable "Pause".After pausing, the object will pick
@@ -235,7 +235,7 @@ MobilityHelper setup_mobility(int mobility_model=0)
     case 2:
         NS_LOG_UNCOND("USING RANDOM WAYPOINT MOBILITY MODEL");
         mobility.SetMobilityModel("ns3::RandomWaypointMobilityModel",
-            // "Position", mobility.GetPosition(), // Position Allocator defines bounds on model
+            "Position", mobility.position, // Position Allocator defines bounds on model
             "Speed", StringValue("ns3::ConstantRandomVariable[Constant=1.0]"), // Random speed picked at each interval
             "Pause", StringValue("ns3::ConstantRandomVariable[Constant=1.0]")); // Random pause time
         break;
@@ -249,10 +249,9 @@ MobilityHelper setup_mobility(int mobility_model=0)
     case 3:
         NS_LOG_UNCOND("USING RANDOM DIRECTION 2D MOBILITY MODEL");
         mobility.SetMobilityModel("ns3::RandomDirection2dMobilityModel",
-            "Direction", StringValue("ns3::ConstantRandomVariable[Constant=1.0]"), // random direction after wall hit
             "Speed", StringValue("ns3::ConstantRandomVariable[Constant=1.0]"), // random speed to use after wall hit
             "Pause", StringValue("ns3::ConstantRandomVariable[Constant=1.0]"), // random duration to pause at wall time
-            "Bounds", StringValue("0|80|0|80")); // walkable bounds
+            "Bounds", RectangleValue(Rectangle(0.0, 20.0, 0.0, 20.0))); // walkable bounds
          
     // Default is a static node mode;
     default:
