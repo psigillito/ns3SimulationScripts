@@ -260,7 +260,8 @@ MobilityHelper setup_mobility(int mobility_model=0)
             "Speed", StringValue("ns3::ConstantRandomVariable[Constant=1.0]"), // random speed to use after wall hit
             "Pause", StringValue("ns3::ConstantRandomVariable[Constant=1.0]"), // random duration to pause at wall time
             "Bounds", RectangleValue(Rectangle(0.0, 20.0, 0.0, 20.0))); // walkable bounds
-         
+
+        break;
     // Default is a static node mode;
     default:
         NS_LOG_UNCOND("USING CONSTANT POSITION MODEL");
