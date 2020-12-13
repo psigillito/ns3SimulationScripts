@@ -200,8 +200,8 @@ MobilityHelper setup_mobility(int mobility_model=0)
     mobility.SetPositionAllocator("ns3::GridPositionAllocator",
         "MinX", DoubleValue(1.0),
         "MinY", DoubleValue(1.0),
-        "DeltaX", DoubleValue(20.0),
-        "DeltaY", DoubleValue(20.0),
+        "DeltaX", DoubleValue(40.0),
+        "DeltaY", DoubleValue(40.0),
         "GridWidth", UintegerValue(3), //SETS NUMBER OF NODES IN A ROW
         "LayoutType", StringValue("RowFirst"));
 
@@ -229,9 +229,9 @@ MobilityHelper setup_mobility(int mobility_model=0)
         mobility.SetMobilityModel("ns3::RandomWalk2dMobilityModel",
             "Mode", StringValue("Time"), // Time mode
             "Time", StringValue("2s"), // Time until direction change
-            "Speed", StringValue("ns3::ConstantRandomVariable[Constant=4.0]"), // random speed picked at each interval
+            "Speed", StringValue("ns3::ConstantRandomVariable[Constant=8.0]"), // random speed picked at each interval
             //"Bounds", StringValue("100|100|100|100")); // walkable bounds
-            "Bounds", RectangleValue(Rectangle(0.0, 80.0, 0.0, 80.0))); // walkable bounds
+            "Bounds", RectangleValue(Rectangle(0.0, 160.0, 0.0, 160.0))); // walkable bounds
         break;
     /**Each object starts by pausing at time zero for the duration governed
     * by the random variable "Pause".After pausing, the object will pick
@@ -257,9 +257,9 @@ MobilityHelper setup_mobility(int mobility_model=0)
     case 3:
         NS_LOG_UNCOND("USING RANDOM DIRECTION 2D MOBILITY MODEL");
         mobility.SetMobilityModel("ns3::RandomDirection2dMobilityModel",
-            "Speed", StringValue("ns3::ConstantRandomVariable[Constant=4.0]"), // random speed to use after wall hit
+            "Speed", StringValue("ns3::ConstantRandomVariable[Constant=8.0]"), // random speed to use after wall hit
             "Pause", StringValue("ns3::ConstantRandomVariable[Constant=1.0]"), // random duration to pause at wall time
-            "Bounds", RectangleValue(Rectangle(0.0, 80.0, 0.0, 80.0))); // walkable bounds
+            "Bounds", RectangleValue(Rectangle(0.0, 160.0, 0.0, 160.0))); // walkable bounds
 
         break;
     // Default is a static node mode;
