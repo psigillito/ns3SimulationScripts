@@ -234,8 +234,17 @@ MobilityHelper setup_mobility(int mobility_model=0)
     */
     case 2:
         NS_LOG_UNCOND("USING RANDOM WAYPOINT MOBILITY MODEL");
+
+        // Position Allocator for waypoint assignment
+        GridPositionAllocator posAllocator;
+        posAllocator.SetMinX(1.0);
+        posAllocator.SetMinY(1.0);
+        posAllocator.SetDeltaX(5.0);
+        posAllocator.SetDeltaY(5.0);
+        posAllocator.SetLayoutType(ns3::GridPositionAllocator::ROW_FIRST);
+
         mobility.SetMobilityModel("ns3::RandomWaypointMobilityModel",
-            "Position", mobility.position, // Position Allocator defines bounds on model
+            "PositionAllocator", PointerValue(&posAllocator)), // Position Allocator defines bounds on model
             "Speed", StringValue("ns3::ConstantRandomVariable[Constant=1.0]"), // Random speed picked at each interval
             "Pause", StringValue("ns3::ConstantRandomVariable[Constant=1.0]")); // Random pause time
         break;
