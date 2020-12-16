@@ -5,8 +5,6 @@
 #include "ns3/mobility-module.h"
 #include "ns3/spectrum-module.h"
 #include "ns3/propagation-module.h"
-#include "ns3/sixlowpan-module.h"
-#include "ns3/lr-wpan-module.h"
 #include "ns3/csma-module.h"
 #include "ns3/netanim-module.h"
 #include "ns3/network-module.h"
@@ -34,127 +32,166 @@
 #include <cmath>
 #include <iostream>
 #include <fstream>
-
+#include <iomanip>
 
 using namespace ns3;
+using namespace dsr;
 
-int bytesTotal{0};
+
+//Total packets received counter
 int packetsReceived{0};
-double TotalTime{200.0};
+//Total simulation time - Modified between test
+double TotalTime{301.0}; //5 min simulation extra second is to write values on last second
 
+//CITATION:
+//	Modified from ns320/src/examples/energy/energy-model-example.cc
 /// Trace function for remaining energy at node.
-/*static void RemainingEnergy (double oldValue, double remainingEnergy)
+void RemainingEnergy(double oldValue, double remainingEnergy)
 {
-  NS_LOG_UNCOND (Simulator::Now ().GetSeconds ()
-                 << "s Current remaining energy = " << remainingEnergy << "J");
+	//Only print if there is a change of at least 0.01
+	if( std::fabs(oldValue - remainingEnergy) > 0.01)
+	{
+	   NS_LOG_UNCOND(Simulator::Now().GetSeconds()
+			<< "s Current remaining energy = " << std::setprecision(7) << remainingEnergy << "J");
+	}
 }
 
+//CITATION:
+//	Modified from ns320/src/examples/energy/energy-model-example.cc
 /// Trace function for total energy consumption at node.
-static void TotalEnergy (double oldValue, double totalEnergy)
+void TotalEnergy(double oldValue, double totalEnergy)
 {
-  NS_LOG_UNCOND (Simulator::Now ().GetSeconds ()
-                 << "s Total energy consumed by radio = " << totalEnergy << "J");
+    NS_LOG_UNCOND(Simulator::Now().GetSeconds()
+        << "s Total energy consumed by radio = " << totalEnergy << "J");
 }
-*/
 
-static inline std::string
-PrintReceivedPacket (Ptr<Socket> socket, Ptr<Packet> packet, Address senderAddress)
+//CITATION:
+//	Modified from ns320/src/examples/energy/energy-model-example.cc
+/// Trace function for the power harvested by the energy harvester.
+void HarvestedPower(double oldValue, double harvestedPower)
+{
+    NS_LOG_UNCOND(Simulator::Now().GetSeconds()
+        << "s Current harvested power = " << harvestedPower << " W");
+}
+
+//CITATION:
+//	Modified from ns320/src/examples/energy/energy-model-example.cc
+/// Trace function for the total energy harvested by the node.
+void TotalEnergyHarvested(double oldValue, double TotalEnergyHarvested)
+{
+    NS_LOG_UNCOND(Simulator::Now().GetSeconds()
+        << "s Total energy harvested by harvester = "
+        << TotalEnergyHarvested << " J");
+}
+
+//CITATION:
+//	Modified from ns320/src/examples/routing/manet-routing-compare.cc
+static inline std::string PrintReceivedPacket (Ptr<Socket> socket, Ptr<Packet> packet, Address senderAddress)
 {
   std::ostringstream oss;
 
-  oss << Simulator::Now ().GetSeconds () << " " << socket->GetNode ()->GetId ();
+  oss << Simulator::Now().GetSeconds() << " " << socket->GetNode()->GetId();
 
-  if (InetSocketAddress::IsMatchingType (senderAddress))
-    {
+  if (InetSocketAddress::IsMatchingType(senderAddress))
+  {
       InetSocketAddress addr = InetSocketAddress::ConvertFrom (senderAddress);
-      oss << " received one packet from " << addr.GetIpv4 ();
-    }
-  else
-    {
-      oss << " received one packet!";
-    }
-  return oss.str ();
+      oss << " received one packet from " << addr.GetIpv4();
+  }
+
+  return oss.str();
 }
 
-
+//CITATION:
+//	Modified from ns320/src/examples/routing/manet-routing-compare.cc
 void ReceivePacket (Ptr<Socket> socket)
 {
   Ptr<Packet> packet;
   Address senderAddress;
   while ((packet = socket->RecvFrom (senderAddress)))
-    {
-      bytesTotal += packet->GetSize ();
+  {
       packetsReceived += 1;
       NS_LOG_UNCOND (PrintReceivedPacket (socket, packet, senderAddress));
-    }
+  }
 }
 
-
-//for each node in the list send to individual packet to each other node.
-//this loop completes before simulation starts so packets are not going to be reported received in any particular order.
+//CITATION:
+//	Modified from ns320/src/examples/routing/manet-routing-compare.cc
+//for each node in the list setup applications to be sending to each other so that traffic continues to be generated throughout simulation
 void setup_packets_to_be_sent(NodeContainer& nodes, Ipv4InterfaceContainer& adhocInterfaces, OnOffHelper& onoff1 )
 {
 	TypeId tid = TypeId::LookupByName ("ns3::UdpSocketFactory");
 
 	for (unsigned int i = 0; i < nodes.GetN(); i++)
 	{
+		Ptr<Socket> sink = Socket::CreateSocket (nodes.Get(i), tid);
+		InetSocketAddress local = InetSocketAddress (adhocInterfaces.GetAddress (i), 9);
+		sink->Bind (local);
+		sink->SetRecvCallback (MakeCallback (ReceivePacket));
+
 		for( unsigned int j = 0; j < nodes.GetN(); ++j)
 		{
-			Ptr<Socket> sink = Socket::CreateSocket (nodes.Get(i), tid);
-			InetSocketAddress local = InetSocketAddress (adhocInterfaces.GetAddress (i), 9/*port number*/);
-			sink->Bind (local);
-			sink->SetRecvCallback (MakeCallback (ReceivePacket));
-
 			AddressValue remoteAddress (InetSocketAddress (adhocInterfaces.GetAddress (i), 9));
 			onoff1.SetAttribute ("Remote", remoteAddress);
 
-			Ptr<UniformRandomVariable> var = CreateObject<UniformRandomVariable> ();
+			Ptr<UniformRandomVariable> var = CreateObject<UniformRandomVariable>();
 
 			ApplicationContainer temp = onoff1.Install (nodes.Get(j));
-			temp.Start (Seconds (var->GetValue (100.0,101.0)));
+			temp.Start (Seconds (var->GetValue (0.0,1.0)));
 			temp.Stop (Seconds (TotalTime));
 		}
 	  }
 }
 
-InternetStackHelper setup_internet_stack( int routing_protocol)
+//CITATION:
+//	Modified from ns320/src/examples/routing/manet-routing-compare.cc
+InternetStackHelper setup_internet_stack( int routing_protocol, NodeContainer& nodes)
 {
-
 	InternetStackHelper internet;
 	OlsrHelper olsr;
     AodvHelper aodv;
     DsdvHelper dsdv;
+    DsrHelper dsr;
+    DsrMainHelper dsrMain;
 
     switch( routing_protocol)
         {
         case 1:
             NS_LOG_UNCOND ("AODV ROUTING ENABLED");
             internet.SetRoutingHelper(aodv);
+            internet.Install(nodes);
         	break;
         case 2:
             NS_LOG_UNCOND ("OLSR ROUTING ENABLED");
             internet.SetRoutingHelper(olsr);
+            internet.Install(nodes);
         	break;
         case 3:
             NS_LOG_UNCOND ("DSDV ROUTING ENABLED");
             internet.SetRoutingHelper(dsdv);
+            internet.Install(nodes);
         	break;
+        case 4:
+            NS_LOG_UNCOND("DSR ROUTING ENABLED");
+            internet.Install(nodes);
+            dsrMain.Install(dsr, nodes);
+            break;
         }
 
-    internet.SetRoutingHelper(aodv);
     return internet;
 }
 
+//CITATION:
+//	Modified from ns320/src/examples/routing/manet-routing-compare.cc
 NetDeviceContainer setup_net_devices( NodeContainer& nodes, std::string phyMode)
 {
     WifiHelper wifi;
     wifi.SetStandard (WIFI_STANDARD_80211b);
 
-    YansWifiPhyHelper wifiPhy =  YansWifiPhyHelper::Default ();
+    YansWifiPhyHelper wifiPhy =  YansWifiPhyHelper::Default();
     YansWifiChannelHelper wifiChannel;
     wifiChannel.SetPropagationDelay ("ns3::ConstantSpeedPropagationDelayModel");
     wifiChannel.AddPropagationLoss ("ns3::FriisPropagationLossModel");
-    wifiPhy.SetChannel (wifiChannel.Create ());
+    wifiPhy.SetChannel (wifiChannel.Create());
 
     WifiMacHelper wifiMac;
     wifi.SetRemoteStationManager ("ns3::ConstantRateWifiManager",
@@ -169,118 +206,222 @@ NetDeviceContainer setup_net_devices( NodeContainer& nodes, std::string phyMode)
     return wifi.Install (wifiPhy, wifiMac, nodes);
 }
 
-MobilityHelper setup_mobility()
+MobilityHelper setup_mobility(int mobility_model=0)
 {
     MobilityHelper mobility;
-    mobility.SetMobilityModel ("ns3::ConstantPositionMobilityModel");
-    mobility.SetPositionAllocator ("ns3::GridPositionAllocator",
-                                   "MinX", DoubleValue (0.0),
-                                   "MinY", DoubleValue (0.0),
-                                   "DeltaX", DoubleValue (80),
-                                   "DeltaY", DoubleValue (80),
-                                   "GridWidth", UintegerValue (10),
-                                   "LayoutType", StringValue ("RowFirst"));
-    mobility.SetMobilityModel ("ns3::ConstantPositionMobilityModel");
 
-	return mobility;
+    // Default Static Position Allocator
+    mobility.SetPositionAllocator("ns3::GridPositionAllocator",
+        "MinX", DoubleValue(1.0),
+        "MinY", DoubleValue(1.0),
+        "DeltaX", DoubleValue(40.0),
+        "DeltaY", DoubleValue(40.0),
+        // Sets the number of rows, modified between tests
+        "GridWidth", UintegerValue(3),
+        "LayoutType", StringValue("RowFirst"));
+
+    // Position Allocator for waypoint assignment
+    GridPositionAllocator posAllocator;
+    posAllocator.SetMinX(1.0);
+    posAllocator.SetMinY(1.0);
+    posAllocator.SetDeltaX(3.0);
+    posAllocator.SetDeltaY(3.0);
+    posAllocator.SetLayoutType(ns3::GridPositionAllocator::ROW_FIRST);
+
+    // Setting Mobility Model, based around 
+    // CITATION: ns320/src/examples/routing/manet-routing-compare.cc
+    switch (mobility_model)
+    {
+    /**Each instance moves with a speed and direction chosen at random
+    * with the user - provided random variables until
+    * either a fixed distance has been walked or until a fixed amount
+    * of time.If we hit one of the boundaries(specified by a rectangle),
+    * of the model, we rebound on the boundary with a reflexive angle
+    *and speed.This model is often identified as a brownian motion
+    * model.
+    */
+    case 1:
+        NS_LOG_UNCOND("USING RANDOM WALK 2D MOBILITY MODEL");
+        mobility.SetMobilityModel("ns3::RandomWalk2dMobilityModel",
+            "Mode", StringValue("Time"), // Time mode
+            "Time", StringValue("2s"), // Time until direction change
+            "Speed", StringValue("ns3::ConstantRandomVariable[Constant=8.0]"), // random speed picked at each interval
+            //"Bounds", StringValue("100|100|100|100")); // walkable bounds
+            // This defines the outer walkable boundry
+            "Bounds", RectangleValue(Rectangle(0.0, 160.0, 0.0, 160.0))); // walkable bounds
+        break;
+    /**Each object starts by pausing at time zero for the duration governed
+    * by the random variable "Pause".After pausing, the object will pick
+    * a new waypoint(via the PositionAllocator) and a new random speed
+    * via the random variable "Speed", and will begin moving towards the
+    * waypoint at a constant speed.When it reaches the destination,
+    * the process starts over(by pausing).
+    */
+    case 2:
+        NS_LOG_UNCOND("USING RANDOM WAYPOINT MOBILITY MODEL");
+        mobility.SetMobilityModel("ns3::RandomWaypointMobilityModel",
+            "PositionAllocator", PointerValue(&posAllocator), // Position Allocator defines bounds on model
+            "Speed", StringValue("ns3::ConstantRandomVariable[Constant=1.0]"), // Random speed picked at each interval
+            "Pause", StringValue("ns3::ConstantRandomVariable[Constant=1.0]")); // Random pause time
+        break;
+    /**
+    * The movement of objects is based on random directions: each object
+    * pauses for a specific delay, chooses a random direction and speed and
+    * then travels in the specific direction until it reaches one of
+    * the boundaries of the model. When it reaches the boundary, it pauses,
+    * selects a new direction and speed, aso.
+    */
+    case 3:
+        NS_LOG_UNCOND("USING RANDOM DIRECTION 2D MOBILITY MODEL");
+        mobility.SetMobilityModel("ns3::RandomDirection2dMobilityModel",
+            "Speed", StringValue("ns3::ConstantRandomVariable[Constant=8.0]"), // random speed to use after wall hit
+            "Pause", StringValue("ns3::ConstantRandomVariable[Constant=1.0]"), // random duration to pause at wall time
+            // This defines the outer walkable boundry
+            "Bounds", RectangleValue(Rectangle(0.0, 160.0, 0.0, 160.0))); // walkable bounds
+
+        break;
+    // Default is a static node mode;
+    default:
+        NS_LOG_UNCOND("USING CONSTANT POSITION MODEL");
+        mobility.SetMobilityModel("ns3::ConstantPositionMobilityModel");
+    }
+
+    return mobility;
 }
 
+//Report energy consumption callback.
+//writes out to txt file
+//this function is self scheduling i.e. it reschedules itself for every two seconds.
+std::ofstream output_file;
+DeviceEnergyModelContainer deviceModels;
 
+// CITATION:
+// based around ns320/src/examples/energy/energy-model-example.cc
+void Report_Energy_Consumption()
+{
+	auto time = Simulator::Now().GetSeconds();
+	double energyConsumed = 0;
+
+	for (DeviceEnergyModelContainer::Iterator iter = deviceModels.Begin(); iter != deviceModels.End(); iter++)
+	{
+		energyConsumed += (*iter)->GetTotalEnergyConsumption();
+	}
+	output_file << time << "	" << packetsReceived << "	" << energyConsumed << "\n";
+
+    Simulator::Schedule (Seconds (2.0), &Report_Energy_Consumption);
+}
 
 
 int main (int argc, char** argv)
 {
-	//first arg is routing protocol 1 = aodv, 2 = olsr, 3 = dsdv
+    // Decided against using the energy harvestor, not needed for measuring power consumption.
+    // Energy Harvester variables
+    //double harvestingUpdateInterval = 1;  // seconds
+
+    // Starting Energy Source Value
+    double basicEnergySourceInitialEnergyJ = 20000; // approx. 9 volt battery (19440 J )
+
+    // Default Wifi Model Energy Costs
+    double transmitCurrent = 0.0174; // Amps
+    double recieveCurrent = 0.0197; // Amps
+
+	// first arg is routing protocol 1 = aodv, 2 = olsr, 3 = dsdv
 	auto routing_protocol = std::stoi(argv[1]);
 	auto nodes_count = std::stoi(argv[2]);
 
+    // third arg is mobility model, default no mobility, 1: Random2Walk, 2: RandomWaypoint, 3: Random Direction 
+    auto mobility_model = std::stoi(argv[3]);
+
+	output_file.open ("aodv_25nodes_static_grid.txt");
+    NS_LOG_UNCOND ("START TOTAL ENERGY IN EXPERIMENT: " << (nodes_count * basicEnergySourceInitialEnergyJ));
     NS_LOG_UNCOND ("NODES IN EXPERIMENT " + std::string(argv[2]));
 
-	Packet::EnablePrinting ();
+	Packet::EnablePrinting();
 
     std::string rate ("2048bps");
     std::string phyMode ("DsssRate11Mbps");
     std::string tr_name ("manet-routing-compare");
 
-    Config::SetDefault  ("ns3::OnOffApplication::PacketSize",StringValue ("64"));
+    Config::SetDefault  ("ns3::OnOffApplication::PacketSize",StringValue ("1000"));
     Config::SetDefault ("ns3::OnOffApplication::DataRate",  StringValue (rate));
-    Config::SetDefault ("ns3::WifiRemoteStationManager::NonUnicastMode",StringValue (phyMode));
+    //Config::SetDefault ("ns3::WifiRemoteStationManager::NonUnicastMode",StringValue (phyMode));
 
-
-    //Create Nodes
+    // Create Nodes
     NodeContainer nodes;
     nodes.Create(nodes_count);
 
-    //Create configured Net Devices (wifi and physical layer setup)
+    // Create configured Net Devices (wifi and physical layer setup)
     NetDeviceContainer adhocDevices = setup_net_devices(nodes, phyMode);
 
     // Set Mobility
-    MobilityHelper mobility = setup_mobility();
+    MobilityHelper mobility = setup_mobility(mobility_model);
     mobility.Install (nodes);
 
-    //Set Routing and Network Layer
-    InternetStackHelper internet = setup_internet_stack(routing_protocol);
-    internet.Install (nodes);
+    // Set Routing and Network Layer
+    InternetStackHelper internet = setup_internet_stack(routing_protocol, nodes);
 
     Ipv4AddressHelper addressAdhoc;
     addressAdhoc.SetBase ("10.1.1.0", "255.255.255.0");
     Ipv4InterfaceContainer adhocInterfaces;
     adhocInterfaces = addressAdhoc.Assign (adhocDevices);
 
-    // ON/OFF device behaviour
-    OnOffHelper onoff1 ("ns3::UdpSocketFactory",Address ());
+    // ON/OFF device behavior
+    OnOffHelper onoff1 ("ns3::UdpSocketFactory",Address());
     onoff1.SetAttribute ("OnTime", StringValue ("ns3::ConstantRandomVariable[Constant=1.0]"));
     onoff1.SetAttribute ("OffTime", StringValue ("ns3::ConstantRandomVariable[Constant=0.0]"));
 
     /************************** Energy Model ************************/
-
-    // energy source
- /*   BasicEnergySourceHelper basicSourceHelper;
-    // configure energy source
-    basicSourceHelper.Set ("BasicEnergySourceInitialEnergyJ", DoubleValue (0.1));
-    // install source
+    // Based around energy helper example - ns320/src/examples/energy/energy-model-example.cc
+    // Configure and install energy source
+    BasicEnergySourceHelper basicSourceHelper;
+    basicSourceHelper.Set ("BasicEnergySourceInitialEnergyJ", DoubleValue (basicEnergySourceInitialEnergyJ));
     EnergySourceContainer sources = basicSourceHelper.Install (nodes);
-    // device energy model
-    WifiRadioEnergyModelHelper radioEnergyHelper;
+
     // configure radio energy model
-    radioEnergyHelper.Set ("TxCurrentA", DoubleValue (0.0174));
+    WifiRadioEnergyModelHelper radioEnergyHelper;
+    
+    double voltage = 9.0; // volts
+
+    radioEnergyHelper.Set("TxCurrentA", DoubleValue (transmitCurrent)); // transmission current
+    radioEnergyHelper.Set("RxCurrentA", DoubleValue (recieveCurrent)); // receive current
+
+    radioEnergyHelper.SetTxCurrentModel ("ns3::LinearWifiTxCurrentModel",
+                                           "Voltage", DoubleValue (voltage) );
+
     // install device model
-    DeviceEnergyModelContainer deviceModels = radioEnergyHelper.Install (adhocDevices, sources);
-*/
-    /** connect trace sources **/
-    /***************************************************************************/
-    // all sources are connected to node 1
-    // energy source
-/*    Ptr<BasicEnergySource> basicSourcePtr = DynamicCast<BasicEnergySource> (sources.Get (1));
-    basicSourcePtr->TraceConnectWithoutContext ("RemainingEnergy", MakeCallback (&RemainingEnergy));
-    // device energy model
-    Ptr<DeviceEnergyModel> basicRadioModelPtr =
-    basicSourcePtr->FindDeviceEnergyModels ("ns3::WifiRadioEnergyModel").Get (0);
-    NS_ASSERT (basicRadioModelPtr != NULL);
-    basicRadioModelPtr->TraceConnectWithoutContext ("TotalEnergyConsumption", MakeCallback (&TotalEnergy));
-*/
+    deviceModels = radioEnergyHelper.Install (adhocDevices, sources);
+
+    // Connect trace sources
+    for (unsigned int i = 0; i < sources.GetN(); i++)
+   	{
+    	 Ptr<BasicEnergySource> basicSourcePtr = DynamicCast<BasicEnergySource>(sources.Get(i));
+    	 basicSourcePtr->TraceConnectWithoutContext("RemainingEnergy", MakeCallback(&RemainingEnergy) );
+   	}
 
     //Setup packets that will be sent during the simulation.
     setup_packets_to_be_sent(nodes, adhocInterfaces, onoff1 );
 
     //creating animation interface will create xml runnable by netanim
-    AnimationInterface anim ("PHIL_TEST.xml");
+    AnimationInterface anim("manet_simulation.xml");
 
-    Simulator::Stop (Seconds (TotalTime));
-    Simulator::Run ();
+    Simulator::Schedule(Seconds(2.0), &Report_Energy_Consumption);
 
-    NS_LOG_UNCOND ("Blargh");
+    Simulator::Stop(Seconds(TotalTime));
+    Simulator::Run();
 
-    /*for (DeviceEnergyModelContainer::Iterator iter = deviceModels.Begin (); iter != deviceModels.End (); iter ++)
-    {
-      double energyConsumed = (*iter)->GetTotalEnergyConsumption ();
-      NS_LOG_UNCOND ("End of simulation (" << Simulator::Now ().GetSeconds ()
-                     << "s) Total energy consumed by radio = " << energyConsumed << "J");
-      NS_ASSERT (energyConsumed <= 0.1);
-    }*/
+    double total_consumed = 0;
+    for (DeviceEnergyModelContainer::Iterator iter = deviceModels.Begin(); iter != deviceModels.End(); iter++)
+        {
+          double energyConsumed = (*iter)->GetTotalEnergyConsumption();
+          total_consumed += energyConsumed;
+          NS_LOG_UNCOND ("End of simulation (" << Simulator::Now().GetSeconds()
+                         << "s) Total energy consumed by radio = " << energyConsumed << "J");
+        }
 
+    NS_LOG_UNCOND("Total Energy Consumed = " << std::setprecision(7) << total_consumed << " J");
 
-    Simulator::Destroy ();
+    NS_LOG_UNCOND("Packets Received = " << packetsReceived);
 
-
+    Simulator::Destroy();
+    output_file.close();
 }
