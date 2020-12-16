@@ -40,7 +40,7 @@ using namespace dsr;
 
 //Total packets received counter
 int packetsReceived{0};
-//Total simulation time
+//Total simulation time - Modified between test
 double TotalTime{301.0}; //5 min simulation extra second is to write values on last second
 
 //CITATION:
@@ -216,7 +216,8 @@ MobilityHelper setup_mobility(int mobility_model=0)
         "MinY", DoubleValue(1.0),
         "DeltaX", DoubleValue(40.0),
         "DeltaY", DoubleValue(40.0),
-        "GridWidth", UintegerValue(3), //SETS NUMBER OF NODES IN A ROW
+        // Sets the number of rows, modified between tests
+        "GridWidth", UintegerValue(3),
         "LayoutType", StringValue("RowFirst"));
 
     // Position Allocator for waypoint assignment
@@ -227,7 +228,8 @@ MobilityHelper setup_mobility(int mobility_model=0)
     posAllocator.SetDeltaY(3.0);
     posAllocator.SetLayoutType(ns3::GridPositionAllocator::ROW_FIRST);
 
-    // Setting Mobility Model
+    // Setting Mobility Model, based around 
+    // CITATION: ns320/src/examples/routing/manet-routing-compare.cc
     switch (mobility_model)
     {
     /**Each instance moves with a speed and direction chosen at random
@@ -245,6 +247,7 @@ MobilityHelper setup_mobility(int mobility_model=0)
             "Time", StringValue("2s"), // Time until direction change
             "Speed", StringValue("ns3::ConstantRandomVariable[Constant=8.0]"), // random speed picked at each interval
             //"Bounds", StringValue("100|100|100|100")); // walkable bounds
+            // This defines the outer walkable boundry
             "Bounds", RectangleValue(Rectangle(0.0, 160.0, 0.0, 160.0))); // walkable bounds
         break;
     /**Each object starts by pausing at time zero for the duration governed
@@ -273,6 +276,7 @@ MobilityHelper setup_mobility(int mobility_model=0)
         mobility.SetMobilityModel("ns3::RandomDirection2dMobilityModel",
             "Speed", StringValue("ns3::ConstantRandomVariable[Constant=8.0]"), // random speed to use after wall hit
             "Pause", StringValue("ns3::ConstantRandomVariable[Constant=1.0]"), // random duration to pause at wall time
+            // This defines the outer walkable boundry
             "Bounds", RectangleValue(Rectangle(0.0, 160.0, 0.0, 160.0))); // walkable bounds
 
         break;
@@ -286,11 +290,13 @@ MobilityHelper setup_mobility(int mobility_model=0)
 }
 
 //Report energy consumption callback.
-//writes out to txt file.
+//writes out to txt file
 //this function is self scheduling i.e. it reschedules itself for every two seconds.
 std::ofstream output_file;
 DeviceEnergyModelContainer deviceModels;
 
+// CITATION:
+// based around ns320/src/examples/energy/energy-model-example.cc
 void Report_Energy_Consumption()
 {
 	auto time = Simulator::Now().GetSeconds();
@@ -308,6 +314,7 @@ void Report_Energy_Consumption()
 
 int main (int argc, char** argv)
 {
+    // Decided against using the energy harvestor, not needed for measuring power consumption.
     // Energy Harvester variables
     //double harvestingUpdateInterval = 1;  // seconds
 
@@ -364,6 +371,7 @@ int main (int argc, char** argv)
     onoff1.SetAttribute ("OffTime", StringValue ("ns3::ConstantRandomVariable[Constant=0.0]"));
 
     /************************** Energy Model ************************/
+    // Based around energy helper example - ns320/src/examples/energy/energy-model-example.cc
     // Configure and install energy source
     BasicEnergySourceHelper basicSourceHelper;
     basicSourceHelper.Set ("BasicEnergySourceInitialEnergyJ", DoubleValue (basicEnergySourceInitialEnergyJ));
